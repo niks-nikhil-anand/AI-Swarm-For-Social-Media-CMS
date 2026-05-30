@@ -1,26 +1,243 @@
-@import "tailwindcss";
+/* ============================================================
+   SWARM — AI Orchestration Platform
+   tokens.css — dark-first neon/glass design language
 
+   Built for the "AI Swarm" brief. Borrows Foundry's spacing
+   ladder, type scale discipline and JetBrains-Mono tabular
+   numerals, but replaces the calm steel/white skin with a
+   dark, restrained-neon, glassmorphic surface system.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ---- Base surfaces ---- */
+  --bg:            #0A0A0A;
+  --bg-2:          #0d0d0f;
+  --surface:       #111113;
+  --elevated:      #18181B;
+  --elevated-2:    #1e1e22;
+  --border:        #262626;
+  --border-soft:   #1c1c1f;
+  --border-strong: #353539;
+
+  /* ---- Text ---- */
+  --text:          #FAFAFA;
+  --text-2:        #d4d4d8;
+  --muted:         #A1A1AA;
+  --faint:         #6b6b73;
+  --on-accent:     #ffffff;
+
+  /* ---- Glass ---- */
+  --glass:         rgba(24, 24, 27, 0.62);
+  --glass-strong:  rgba(20, 20, 23, 0.82);
+  --glass-border:  rgba(255, 255, 255, 0.08);
+  --glass-hi:      rgba(255, 255, 255, 0.04);
+  --scrim:         rgba(0, 0, 0, 0.62);
+
+  /* ---- Brand accents (raw) ---- */
+  --blue:   #3B82F6;   --blue-soft:   rgba(59,130,246,0.14);  --blue-line:  rgba(59,130,246,0.40);
+  --purple: #A855F7;   --purple-soft: rgba(168,85,247,0.14);  --purple-line:rgba(168,85,247,0.42);
+  --cyan:   #22D3EE;   --cyan-soft:   rgba(34,211,238,0.13);  --cyan-line:  rgba(34,211,238,0.40);
+  --steel:  #2e74bf;   --steel-soft:  rgba(46,116,191,0.16);  --steel-line: rgba(46,116,191,0.42);
+
+  /* ---- Accent (swapped by [data-accent]) ---- */
+  --accent:        var(--blue);
+  --accent-soft:   var(--blue-soft);
+  --accent-line:   var(--blue-line);
+  --accent-glow:   rgba(59,130,246,0.45);
+  --accent-2:      #60a5fa;
+
+  /* ---- Status ---- */
+  --st-idle:     #6b6b73;   --st-idle-soft:   rgba(107,107,115,0.16);
+  --st-working:  #22D3EE;   --st-working-soft:rgba(34,211,238,0.14);
+  --st-blocked:  #F59E0B;   --st-blocked-soft:rgba(245,158,11,0.15);
+  --st-done:     #22C55E;   --st-done-soft:   rgba(34,197,94,0.15);
+  --st-error:    #EF4444;   --st-error-soft:  rgba(239,68,68,0.15);
+
+  /* ---- Elevation (dark: glow + depth) ---- */
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.6);
+  --shadow-md:  0 8px 24px -8px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.4);
+  --shadow-lg:  0 24px 60px -16px rgba(0,0,0,0.8), 0 8px 24px -8px rgba(0,0,0,0.6);
+  --shadow-pop: 0 16px 48px -12px rgba(0,0,0,0.85);
+  --ring-focus: 0 0 0 3px var(--accent-glow);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg:            #FAFAFA;
+  --bg-2:          #f3f4f6;
+  --surface:       #FFFFFF;
+  --elevated:      #FFFFFF;
+  --elevated-2:    #fbfbfc;
+  --border:        #e6e6ea;
+  --border-soft:   #eeeef1;
+  --border-strong: #d3d3da;
+
+  --text:          #0b0b0d;
+  --text-2:        #2a2a31;
+  --muted:         #6a6a74;
+  --faint:         #9a9aa4;
+  --on-accent:     #ffffff;
+
+  --glass:         rgba(255, 255, 255, 0.70);
+  --glass-strong:  rgba(255, 255, 255, 0.88);
+  --glass-border:  rgba(10, 10, 15, 0.08);
+  --glass-hi:      rgba(255, 255, 255, 0.6);
+  --scrim:         rgba(15, 18, 26, 0.40);
+
+  --st-idle:     #9a9aa4;   --st-idle-soft:   rgba(154,154,164,0.18);
+  --st-working:  #0891b2;   --st-working-soft:rgba(34,211,238,0.16);
+  --st-blocked:  #b45309;   --st-blocked-soft:rgba(245,158,11,0.18);
+  --st-done:     #15803d;   --st-done-soft:   rgba(34,197,94,0.16);
+  --st-error:    #b91c1c;   --st-error-soft:  rgba(239,68,68,0.15);
+
+  --shadow-sm:  0 1px 2px rgba(16,18,24,0.08);
+  --shadow-md:  0 8px 24px -10px rgba(16,18,24,0.18), 0 2px 6px rgba(16,18,24,0.06);
+  --shadow-lg:  0 24px 60px -18px rgba(16,18,24,0.26), 0 8px 24px -12px rgba(16,18,24,0.12);
+  --shadow-pop: 0 16px 48px -14px rgba(16,18,24,0.28);
+}
+
+/* ---- Accent swatches ---- */
+[data-accent="blue"]   { --accent: var(--blue);   --accent-soft: var(--blue-soft);   --accent-line: var(--blue-line);   --accent-glow: rgba(59,130,246,0.45);  --accent-2:#60a5fa; }
+[data-accent="purple"] { --accent: var(--purple); --accent-soft: var(--purple-soft); --accent-line: var(--purple-line); --accent-glow: rgba(168,85,247,0.45);  --accent-2:#c084fc; }
+[data-accent="cyan"]   { --accent: var(--cyan);   --accent-soft: var(--cyan-soft);   --accent-line: var(--cyan-line);   --accent-glow: rgba(34,211,238,0.42);  --accent-2:#67e8f9; }
+[data-accent="steel"]  { --accent: var(--steel);  --accent-soft: var(--steel-soft);  --accent-line: var(--steel-line);  --accent-glow: rgba(46,116,191,0.45);  --accent-2:#5b9bdc; }
+
+/* ---- Spacing (Foundry 4-based ladder) ---- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --s1:2px; --s2:4px; --s3:8px; --s4:12px; --s5:16px; --s6:24px; --s7:32px; --s8:48px; --s9:64px; --s10:96px;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+  --font: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 
+  --nav-w: 248px;
+  --header-h: 56px;
+
+  /* density (overridden by [data-density]) */
+  --row-h: 40px;
+  --card-pad: 20px;
+}
+[data-density="compact"] { --row-h: 32px; --card-pad: 14px; }
+
+/* ============================================================
+   Base
+   ============================================================ */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+h1,h2,h3,h4,p { margin: 0; }
+.h1 { font-size: 30px; line-height: 1.15; font-weight: 600; letter-spacing: -0.6px; color: var(--text); }
+.h2 { font-size: 22px; line-height: 1.2;  font-weight: 600; letter-spacing: -0.4px; color: var(--text); }
+.h3 { font-size: 17px; line-height: 1.3;  font-weight: 600; letter-spacing: -0.2px; color: var(--text); }
+.h4 { font-size: 14px; line-height: 1.35; font-weight: 600; color: var(--text); }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.mono  { font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; }
+.tabular { font-variant-numeric: tabular-nums lining-nums; }
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint);
+}
+
+a { color: var(--accent); text-decoration: none; }
+
+/* Inlined Flight Icons fill their box and inherit currentColor */
+.swarm-ico > svg { width: 100%; height: 100%; display: block; }
+.swarm-ico > svg [fill]:not([fill="none"]) { fill: currentColor; }
+.swarm-ico > svg [stroke]:not([stroke="none"]) { stroke: currentColor; }
+
+/* ---- Glass surface utility ---- */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+}
+.glass-strong {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid var(--glass-border);
+}
+
+/* ---- Scrollbars ---- */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--faint); background-clip: content-box; border: 3px solid transparent; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- Focus ---- */
+:focus-visible { outline: none; box-shadow: var(--ring-focus); border-radius: var(--r-xs); }
+
+/* ============================================================
+   Motion — intensity scaled by --mo (0..1), set on <html>
+   ============================================================ */
+:root { --mo: 0.6; }
+
+@keyframes swarm-pulse {
+  0%,100% { box-shadow: 0 0 0 0 var(--pulse-color, var(--accent-glow)); }
+  50%     { box-shadow: 0 0 0 calc(8px * var(--mo)) transparent; }
+}
+@keyframes swarm-breathe {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.78; transform: scale(calc(1 + 0.06 * var(--mo))); }
+}
+@keyframes swarm-dash {
+  to { stroke-dashoffset: -40; }
+}
+@keyframes swarm-flow {
+  0%   { offset-distance: 0%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@keyframes swarm-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes swarm-spin { to { transform: rotate(360deg); } }
+@keyframes swarm-rise {
+  from { transform: translateY(8px); }
+  to   { transform: translateY(0); }
+}
+@keyframes swarm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes swarm-drift {
+  0%   { transform: translate(0,0); }
+  50%  { transform: translate(calc(14px * var(--mo)), calc(-10px * var(--mo))); }
+  100% { transform: translate(0,0); }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--elevated) 25%, var(--elevated-2) 37%, var(--elevated) 63%);
+  background-size: 200% 100%;
+  animation: swarm-shimmer 1.4s linear infinite;
+  border-radius: var(--r-xs);
+}
+.rise { animation: swarm-rise 0.34s cubic-bezier(0.22,1,0.36,1); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --mo: 0 !important; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* ============================================================
+   App root sizing (ported from Swarm.html)
+   ============================================================ */
+html, body { height: 100%; }
+body { overflow: hidden; }
+#swarm-root { height: 100%; }
