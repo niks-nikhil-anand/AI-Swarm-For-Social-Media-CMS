@@ -258,6 +258,10 @@ export default function SettingsPage() {
   const [modal, setModal] = useState(false);
 
   const backHome = () => router.push("/");
+  async function signOut() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    router.push("/login");
+  }
 
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
@@ -340,7 +344,7 @@ export default function SettingsPage() {
                 <NotifToggle />
               </SettingRow>
               <SettingRow label="Sign out" desc="End this session on all devices.">
-                <Btn kind="danger" icon="lock" onClick={backHome}>Sign out</Btn>
+                <Btn kind="danger" icon="lock" onClick={signOut}>Sign out</Btn>
               </SettingRow>
             </Card>
             <div style={{ height: 40 }} />
