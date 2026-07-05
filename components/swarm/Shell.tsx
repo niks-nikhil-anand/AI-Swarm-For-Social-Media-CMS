@@ -48,6 +48,7 @@ export function Sidebar({ view, activeSession, onNew, onGo, onOpenSession }: {
       <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 14 }}>
         <NavItem icon="dashboard" label="Dashboard" active={view === "dashboard"} onClick={() => onGo({ view: "dashboard" })} />
         <NavItem icon="history" label="All projects" active={view === "history"} onClick={() => onGo({ view: "history" })} count={HISTORY.length} />
+        <NavItem icon="tools" label="Skills" active={view === "skills"} onClick={() => onGo({ view: "skills" })} />
       </div>
 
       <div className="eyebrow" style={{ padding: "0 8px 8px" }}>Recent sessions</div>

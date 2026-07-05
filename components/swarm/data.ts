@@ -448,6 +448,29 @@ export const DEFAULT_AGENT_ROSTER: Agent[] = [
     deps: ["fact", "data"], layer: 3 },
 ];
 
+/* ---------- Skills (uploadable agent capabilities) ---------- */
+export type SkillCategory = "Research" | "Writing" | "Data Analysis" | "Automation" | "Custom";
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  category: SkillCategory;
+  version: string;
+  fileName: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+export const SKILL_CATEGORY_ICON: Record<SkillCategory, string> = {
+  Research: "search", Writing: "edit", "Data Analysis": "bar-chart", Automation: "wand", Custom: "box",
+};
+export const SKILL_CATEGORIES: SkillCategory[] = ["Research", "Writing", "Data Analysis", "Automation", "Custom"];
+export const DEFAULT_SKILLS: Skill[] = [
+  { id: "skill-web-research", name: "Web Research Toolkit", description: "Structured live search, source ranking and citation harvesting for the Web Researcher agent.", category: "Research", version: "1.2.0", fileName: "web-research-toolkit.json", fileSize: 18_420, uploadedAt: "28 May 2026" },
+  { id: "skill-slide-formatter", name: "Slide Deck Formatter", description: "Lays narrative content onto branded slide templates and enforces visual rhythm.", category: "Writing", version: "2.0.1", fileName: "slide-formatter.py", fileSize: 9_150, uploadedAt: "24 May 2026" },
+  { id: "skill-citation-verifier", name: "Citation Verifier", description: "Cross-checks quantitative claims against at least two independent sources.", category: "Data Analysis", version: "1.0.4", fileName: "citation-verifier.yaml", fileSize: 4_960, uploadedAt: "19 May 2026" },
+  { id: "skill-auto-summarizer", name: "Auto Summarizer", description: "Condenses long-form findings into an executive-ready narrative arc.", category: "Automation", version: "3.1.0", fileName: "auto-summarizer.js", fileSize: 12_030, uploadedAt: "12 May 2026" },
+];
+
 /* ---------- Output-format options (Define stage) ---------- */
 export const FORMATS: OutputFormat[] = [
   { id: "pptx", label: "PowerPoint", desc: "Slide deck, 10–20 slides", icon: "layers" },
