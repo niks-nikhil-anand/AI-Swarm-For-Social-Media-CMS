@@ -2,7 +2,8 @@
 /* ============================================================
    SWARM — shared UI primitives
    ============================================================ */
-import React, { useState, useEffect, useId, type CSSProperties, type ReactNode } from "react";
+import React, { useState, useEffect, type CSSProperties, type ReactNode } from "react";
+import Image from "next/image";
 
 /* ---------- Icon ----------
    Flight Icons are monochrome `currentColor` SVGs. We fetch the markup once
@@ -43,28 +44,17 @@ export function Icon({ name, size = 16, color, style, className }: {
 
 /* ---------- Swarm logo ---------- */
 export function SwarmMark({ size = 26, glow = true }: { size?: number; glow?: boolean }) {
-  const id = "sm" + useId().replace(/:/g, "");
-  const nodes: [number, number, number][] = [
-    [13, 4.5, 2.0], [21.5, 9, 1.6], [22, 18, 1.7], [14.5, 22, 1.9],
-    [5, 19, 1.6], [4.5, 9.5, 1.7], [13, 13, 3.3],
-  ];
   return (
-    <svg width={size} height={size} viewBox="0 0 26 26" fill="none" style={{ display: "block", filter: glow ? "drop-shadow(0 0 6px var(--accent-glow))" : "none" }}>
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="26" y2="26" gradientUnits="userSpaceOnUse">
-          <stop stopColor="var(--accent-2)" />
-          <stop offset="1" stopColor="var(--accent)" />
-        </linearGradient>
-      </defs>
-      <g stroke="var(--accent-line)" strokeWidth="0.9">
-        <line x1="13" y1="13" x2="13" y2="4.5" /><line x1="13" y1="13" x2="21.5" y2="9" />
-        <line x1="13" y1="13" x2="22" y2="18" /><line x1="13" y1="13" x2="14.5" y2="22" />
-        <line x1="13" y1="13" x2="5" y2="19" /><line x1="13" y1="13" x2="4.5" y2="9.5" />
-      </g>
-      {nodes.map(([cx, cy, r], i) => (
-        <circle key={i} cx={cx} cy={cy} r={r} fill={i === 6 ? `url(#${id})` : "var(--accent)"} opacity={i === 6 ? 1 : 0.92} />
-      ))}
-    </svg>
+    <Image
+      src="/logo/logo.png"
+      alt="Swarm"
+      width={size}
+      height={size}
+      style={{
+        display: "block", width: size, height: size, borderRadius: "22%", objectFit: "cover",
+        filter: glow ? "drop-shadow(0 0 6px var(--accent-glow))" : "none",
+      }}
+    />
   );
 }
 
