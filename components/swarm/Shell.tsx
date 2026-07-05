@@ -4,11 +4,25 @@
    ============================================================ */
 import { useState, useEffect, type ReactNode } from "react";
 import { Logo, Icon, IconBtn, Btn, StatusDot, Stepper, type Stage } from "./ui";
-import { HISTORY } from "./data";
 
-interface CurrentUser { id: string; email: string; name: string | null }
+export interface CurrentUser { id: string; email: string; name: string | null }
+interface RecentProject { id: string; title: string; status: string; accent: string }
 
-function initialsOf(user: CurrentUser): string {
+const PROJECT_STATUS_MAP: Record<string, string> = { Draft: "running", Running: "running", Complete: "complete", Failed: "failed" };
+
+function useRecentProjects(): RecentProject[] {
+  const [projects, setProjects] = useState<RecentProject[]>([]);
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: { id: string; title: string; status: string }[]) =>
+        setProjects(rows.map((r) => ({ id: r.id, title: r.title, status: PROJECT_STATUS_MAP[r.status] || "running", accent: "var(--accent)" }))))
+      .catch(() => setProjects([]));
+  }, []);
+  return projects;
+}
+
+export function initialsOf(user: CurrentUser): string {
   if (user.name?.trim()) {
     const parts = user.name.trim().split(/\s+/);
     return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
@@ -16,7 +30,7 @@ function initialsOf(user: CurrentUser): string {
   return user.email[0]?.toUpperCase() || "?";
 }
 
-function useCurrentUser(): CurrentUser | null {
+export function useCurrentUser(): CurrentUser | null {
   const [user, setUser] = useState<CurrentUser | null>(null);
   useEffect(() => {
     fetch("/api/auth/me")
@@ -54,6 +68,7 @@ export function Sidebar({ view, activeSession, onNew, onGo, onOpenSession }: {
   onGo: (a: { view: string }) => void; onOpenSession: (id: string) => void;
 }) {
   const user = useCurrentUser();
+  const projects = useRecentProjects();
   return (
     <aside style={{
       width: "var(--nav-w)", flexShrink: 0, height: "100%", boxSizing: "border-box",
@@ -69,14 +84,15 @@ export function Sidebar({ view, activeSession, onNew, onGo, onOpenSession }: {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 14 }}>
         <NavItem icon="dashboard" label="Dashboard" active={view === "dashboard"} onClick={() => onGo({ view: "dashboard" })} />
-        <NavItem icon="history" label="All projects" active={view === "history"} onClick={() => onGo({ view: "history" })} count={HISTORY.length} />
+        <NavItem icon="history" label="All projects" active={view === "history"} onClick={() => onGo({ view: "history" })} count={projects.length} />
         <NavItem icon="tools" label="Skills" active={view === "skills"} onClick={() => onGo({ view: "skills" })} />
       </div>
 
       <div className="eyebrow" style={{ padding: "0 8px 8px" }}>Recent sessions</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 2, overflow: "auto", flex: 1, margin: "0 -4px", padding: "0 4px" }}>
-        {HISTORY.slice(0, 6).map((p) => {
-          const active = (view === "flow" && p.id === "p1") || (view === "session" && activeSession === p.id);
+        {projects.length === 0 && <p className="faint" style={{ fontSize: 12, padding: "6px 8px" }}>No projects yet.</p>}
+        {projects.slice(0, 6).map((p) => {
+          const active = view === "session" && activeSession === p.id;
           return (
             <button key={p.id} onClick={() => onOpenSession(p.id)}
               style={{
