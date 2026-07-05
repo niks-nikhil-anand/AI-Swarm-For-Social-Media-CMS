@@ -1,0 +1,249 @@
+// Prisma schema for Swarm.
+// Datasource URL is supplied via prisma.config.ts (Prisma 7 no longer
+// auto-loads .env or reads `url = env(...)` here).
+// This schema is written but NOT migrated — no `prisma migrate`/`db push`
+// has been run against DATABASE_URL.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/* ---------- Enums ---------- */
+
+enum SkillCategory {
+  Research
+  Writing
+  DataAnalysis
+  Automation
+  Custom
+}
+
+enum ProjectStatus {
+  Draft
+  Running
+  Complete
+  Failed
+}
+
+enum AgentRunStatus {
+  Idle
+  Working
+  Blocked
+  Waiting
+  Done
+  Error
+}
+
+enum TimelineEventType {
+  Thought
+  Search
+  Url
+  Note
+  Handoff
+  System
+  Error
+  Warn
+}
+
+enum SlideKind {
+  Title
+  Stat
+  Bullets
+  Chart
+  Close
+}
+
+enum ChartKind {
+  Dist
+  Line
+  Bars
+}
+
+/* ---------- Models ---------- */
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  providerCredentials ProviderCredential[]
+  skills              Skill[]
+  agentDefinitions    AgentDefinition[]
+  projects            Project[]
+}
+
+// Maps to Provider / Settings' Intelligence card.
+// `provider` is a plain String (anthropic/google/openai/openrouter/nvidia/opensource/custom, ...)
+// rather than an enum, since new providers have been added to the UI's data
+// with no migration and should keep working that way.
+model ProviderCredential {
+  id              String   @id @default(cuid())
+  userId          String
+  provider        String
+  apiKeyEncrypted String
+  model           String
+  baseUrl         String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([userId, provider])
+}
+
+// Maps to Skill (Skills page).
+model Skill {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String
+  description String
+  category    SkillCategory
+  version     String
+  fileName    String
+  fileSize    Int
+  uploadedAt  DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Maps to Agent / DEFAULT_AGENT_ROSTER (Settings' Agent roster) — the default
+// team template, independent of any specific project's frozen team.
+model AgentDefinition {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  short     String
+  icon      String
+  accent    String
+  role      String
+  why       String
+  deps      String[]
+  layer     Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Maps to Project (Projects/History page) — also the live-run/output container
+// for the Define -> Roles -> Run -> Output flow.
+model Project {
+  id              String        @id @default(cuid())
+  userId          String
+  title           String
+  goal            String
+  format          String
+  status          ProjectStatus @default(Draft)
+  cost            Float         @default(0)
+  tokensIn        Int           @default(0)
+  tokensOut       Int           @default(0)
+  searches        Int           @default(0)
+  durationSeconds Int?
+  wordCount       Int?
+  summary         String?
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agents          ProjectAgent[]
+  timelineEvents  TimelineEvent[]
+  slides          Slide[]
+  sources         Source[]
+
+  @@index([userId])
+}
+
+// The approved-team snapshot for one project (Roles -> Run). Kept separate
+// from AgentDefinition because a project's team is frozen at launch even if
+// the default roster changes afterwards.
+model ProjectAgent {
+  id          String         @id @default(cuid())
+  projectId   String
+  name        String
+  short       String
+  icon        String
+  accent      String
+  role        String
+  why         String
+  deps        String[]
+  layer       Int
+  status      AgentRunStatus @default(Idle)
+  progress    Float          @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  timelineEvents TimelineEvent[] @relation("AgentTimelineEvents")
+  handoffsTo     TimelineEvent[] @relation("HandoffTarget")
+
+  @@index([projectId])
+}
+
+// Maps to TimelineEvent (Run stage log). Drops the mock's 0-100 sim-clock
+// field `t` — createdAt gives real ordering once this is a real run.
+model TimelineEvent {
+  id             String             @id @default(cuid())
+  projectId      String
+  projectAgentId String
+  type           TimelineEventType
+  text           String
+  url            String?
+  topic          String?
+  toAgentId      String?
+  createdAt      DateTime           @default(now())
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectAgent ProjectAgent  @relation("AgentTimelineEvents", fields: [projectAgentId], references: [id], onDelete: Cascade)
+  toAgent      ProjectAgent? @relation("HandoffTarget", fields: [toAgentId], references: [id])
+
+  @@index([projectId])
+  @@index([projectAgentId])
+}
+
+// Maps to Slide (Output stage).
+model Slide {
+  id        String     @id @default(cuid())
+  projectId String
+  n         Int
+  kind      SlideKind
+  title     String
+  sub       String?
+  footer    String?
+  stat      String?
+  statSub   String?
+  body      String?
+  bullets   String[]
+  chart     ChartKind?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([projectId, n])
+}
+
+// Maps to Source (Output stage citations).
+model Source {
+  id        String  @id @default(cuid())
+  projectId String
+  host      String
+  title     String
+  by        String
+  verified  Boolean @default(false)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}

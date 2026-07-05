@@ -21,6 +21,7 @@ const STAGES: Stage[] = [
   { key: "history", label: "History" },
 ];
 const STAGE_STATUS: Record<string, string> = { define: "drafting", roles: "awaiting", run: "running", output: "complete" };
+const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
 
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
 const TWEAK_DEFAULTS: Tweaks = { theme: "dark", accent: "blue", density: "comfortable", motion: 60 };
@@ -133,10 +134,8 @@ export default function SwarmApp() {
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view={sidebarView} activeSession={activeSession}
         onNew={onNew} onGo={({ view }) => {
-          if (view === "settings") router.push("/settings");
-          else if (view === "dashboard") router.push("/dashboard");
-          else if (view === "history") router.push("/projects");
-          else go(view);
+          const route = SIDEBAR_ROUTES[view];
+          if (route) router.push(route); else go(view);
         }} onOpenSession={openSession} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar
