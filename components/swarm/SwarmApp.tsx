@@ -2,7 +2,7 @@
 /* ============================================================
    SWARM — App root + state machine + appearance tweaks
    ============================================================ */
-import { useState, useEffect, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "./ui";
 import { Sidebar, TopBar } from "./Shell";
@@ -35,7 +35,13 @@ function readTweaks(defaults: Tweaks): Tweaks {
   } catch { return defaults; }
 }
 function useTweaks(defaults: Tweaks): [Tweaks, (k: keyof Tweaks, v: string | number) => void] {
-  const [t, setT] = useState<Tweaks>(() => readTweaks(defaults));
+  const [t, setT] = useState<Tweaks>(defaults);
+  useEffect(() => {
+    // localStorage is only readable on the client — sync the persisted value
+    // in after mount so the SSR/hydration render matches (both start from
+    // `defaults`) instead of branching on `typeof window` in the initializer.
+    setT(readTweaks(defaults));
+  }, [defaults]);
   const setTweak = useCallback((k: keyof Tweaks, v: string | number) => {
     setT((prev) => {
       const next = { ...prev, [k]: v };
@@ -75,7 +81,8 @@ function readAuthed(): boolean {
 export default function SwarmApp() {
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [authed] = useState(readAuthed);
+  const [authed, setAuthed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [screen, setScreen] = useState("define");
   const [, setFlowScreen] = useState("define");
   const [activeSession, setActiveSession] = useState<string | null>(null);
@@ -93,7 +100,14 @@ export default function SwarmApp() {
     r.style.setProperty("--mo", String((t.motion ?? 60) / 100));
   }, [t.theme, t.accent, t.density, t.motion]);
 
-  useEffect(() => { if (!authed) router.push("/login"); }, [authed, router]);
+  useEffect(() => {
+    // `readAuthed` only means something on the client — read it after mount
+    // so the SSR/hydration render (always `false`) matches the initial
+    // client render, instead of branching on `typeof window` up front.
+    setAuthed(readAuthed());
+    setAuthChecked(true);
+  }, []);
+  useEffect(() => { if (authChecked && !authed) router.push("/login"); }, [authChecked, authed, router]);
 
   const pushToast = useCallback((toast: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
