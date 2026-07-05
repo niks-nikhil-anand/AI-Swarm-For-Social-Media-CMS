@@ -3,15 +3,13 @@
    SWARM — App root + state machine + appearance tweaks
    ============================================================ */
 import { useState, useEffect, useCallback, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "./ui";
 import { Sidebar, TopBar } from "./Shell";
-import { Login } from "./Login";
 import { Define } from "./Define";
 import { Roles } from "./Roles";
 import { Run } from "./Run";
 import { Output } from "./Output";
-import { History, Settings } from "./Pages";
-import { Dashboard } from "./Dashboard";
 import { SessionDetail } from "./SessionDetail";
 import type { Stage } from "./ui";
 
@@ -68,9 +66,15 @@ function Toasts({ items, onDismiss }: { items: Toast[]; onDismiss: (id: number) 
   );
 }
 
+function readAuthed(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return localStorage.getItem("swarm-authed") === "1"; } catch { return false; }
+}
+
 export default function SwarmApp() {
+  const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [authed, setAuthed] = useState(false);
+  const [authed] = useState(readAuthed);
   const [screen, setScreen] = useState("define");
   const [, setFlowScreen] = useState("define");
   const [activeSession, setActiveSession] = useState<string | null>(null);
@@ -87,6 +91,8 @@ export default function SwarmApp() {
     r.setAttribute("data-density", t.density);
     r.style.setProperty("--mo", String((t.motion ?? 60) / 100));
   }, [t.theme, t.accent, t.density, t.motion]);
+
+  useEffect(() => { if (!authed) router.push("/login"); }, [authed, router]);
 
   const pushToast = useCallback((toast: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
@@ -109,24 +115,29 @@ export default function SwarmApp() {
     setActiveSession(id); setScreen("session");
   }
 
-  if (!authed) return <Login onAuth={() => { setAuthed(true); pushToast({ icon: "check-circle-fill", tone: "success", title: "Signed in", body: "Welcome back, Avery." }); }} />;
+  if (!authed) return null;
 
   const PROJECT_TITLE = "Quantum computing × cryptography";
-  const TITLES: Record<string, string> = { history: "Projects", session: "Projects", dashboard: "Usage & cost", settings: "Settings" };
+  const TITLES: Record<string, string> = { session: "Projects" };
   const topTitle = FLOW.includes(screen) ? PROJECT_TITLE : (TITLES[screen] || "Swarm");
   const status = STAGE_STATUS[screen] || null;
-  const showStepper = ["define", "roles", "run", "output", "history"].includes(screen);
+  const showStepper = ["define", "roles", "run", "output"].includes(screen);
   const sidebarView = FLOW.includes(screen) ? "flow" : screen;
 
   function jump(key: string) {
-    if (key === "history") return go("history");
+    if (key === "history") return router.push("/projects");
     if (reached.includes(key)) go(key);
   }
 
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view={sidebarView} activeSession={activeSession}
-        onNew={onNew} onGo={({ view }) => go(view)} onOpenSession={openSession} />
+        onNew={onNew} onGo={({ view }) => {
+          if (view === "settings") router.push("/settings");
+          else if (view === "dashboard") router.push("/dashboard");
+          else if (view === "history") router.push("/projects");
+          else go(view);
+        }} onOpenSession={openSession} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar
           stages={showStepper ? STAGES : null}
@@ -140,10 +151,7 @@ export default function SwarmApp() {
           {screen === "roles" && <Roles onLaunch={onLaunch} />}
           {screen === "run" && <Run onComplete={onComplete} runLayout={runLayout} setRunLayout={setRunLayout} graphLayout={graphLayout} setGraphLayout={setGraphLayout} motion={t.motion} />}
           {screen === "output" && <Output onRerun={onRerun} />}
-          {screen === "history" && <History onNew={onNew} onOpen={openSession} />}
-          {screen === "dashboard" && <Dashboard onOpenSession={openSession} />}
-          {screen === "session" && <SessionDetail id={activeSession} onBack={() => go("history")} onOpenLive={openLive} onRerun={onRerun} />}
-          {screen === "settings" && <Settings theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} accent={t.accent} onAccent={(a) => setTweak("accent", a)} />}
+          {screen === "session" && <SessionDetail id={activeSession} onBack={() => router.push("/projects")} onOpenLive={openLive} onRerun={onRerun} />}
         </div>
       </main>
 
