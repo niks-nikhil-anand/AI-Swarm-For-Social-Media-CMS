@@ -8,6 +8,8 @@ import { Icon, Btn, IconBtn, Badge, Card, Segmented, Toggle } from "../../compon
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
 import { PROVIDERS, DEFAULT_AGENT_ROSTER, type Agent } from "../../components/swarm/data";
 
+const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
+
 /* ---- appearance tweaks, persisted to localStorage (mirrors SwarmApp) ---- */
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
 const TWEAK_DEFAULTS: Tweaks = { theme: "dark", accent: "blue", density: "comfortable", motion: 60 };
@@ -248,7 +250,7 @@ export default function SettingsPage() {
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view="settings" activeSession={null}
-        onNew={backHome} onGo={({ view }) => { if (view !== "settings") backHome(); }} onOpenSession={backHome} />
+        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar stages={null} stage="settings" reached={["settings"]} onJump={() => {}} status={null} title="Settings" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
         <div style={{ overflow: "auto", height: "100%", padding: "32px 24px" }}>
