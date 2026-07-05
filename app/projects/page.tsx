@@ -6,7 +6,42 @@ import { useState, useEffect, useCallback, useSyncExternalStore, type CSSPropert
 import { useRouter } from "next/navigation";
 import { Icon, Btn, IconBtn, Badge, Card, Segmented, StatusDot, Empty } from "../../components/swarm/ui";
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
-import { HISTORY, type Project } from "../../components/swarm/data";
+import { FORMATS, type Project, type ProjectStatus } from "../../components/swarm/data";
+
+interface ApiProject {
+  id: string; title: string; goal: string; format: string; status: string;
+  cost: number; tokensIn: number; tokensOut: number; searches: number;
+  durationSeconds: number | null; wordCount: number | null; summary: string | null;
+  createdAt: string; agentsCount: number; sourcesCount: number;
+}
+
+const STATUS_MAP: Record<string, ProjectStatus> = { Draft: "running", Running: "running", Complete: "complete", Failed: "failed" };
+
+function toDisplayProject(row: ApiProject): Project {
+  const fmt = FORMATS.find((f) => f.id === row.format);
+  const mins = row.durationSeconds != null ? Math.floor(row.durationSeconds / 60) : null;
+  const secs = row.durationSeconds != null ? row.durationSeconds % 60 : null;
+  return {
+    id: row.id,
+    title: row.title,
+    fmt: fmt?.label || row.format,
+    fmtIcon: fmt?.icon || "file-text",
+    status: STATUS_MAP[row.status] || "running",
+    date: new Date(row.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    agents: row.agentsCount,
+    accent: "var(--accent)",
+    cost: row.cost,
+    tokIn: row.tokensIn,
+    tokOut: row.tokensOut,
+    searches: row.searches,
+    duration: mins != null && secs != null ? `${mins}:${String(secs).padStart(2, "0")}` : "—",
+    words: row.wordCount ?? 0,
+    sourcesN: row.sourcesCount,
+    kind: row.format === "pptx" ? "pptx" : "doc",
+    summary: row.summary || "",
+    goal: row.goal,
+  };
+}
 
 /* ---- appearance tweaks, persisted to localStorage (mirrors SwarmApp) ---- */
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
@@ -106,8 +141,21 @@ export default function ProjectsPage() {
   }, [t.theme, t.accent, t.density, t.motion]);
 
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [empty, setEmpty] = useState(false);
+  const [previewEmpty, setPreviewEmpty] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   const backHome = () => router.push("/");
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: ApiProject[]) => setProjects(rows.map(toDisplayProject)))
+      .catch(() => setProjects([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const runningCount = projects.filter((p) => p.status === "running").length;
+  const showEmpty = previewEmpty || (!loading && projects.length === 0);
 
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
@@ -120,26 +168,32 @@ export default function ProjectsPage() {
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 16, flexWrap: "wrap" }}>
               <div>
                 <h1 className="h1">Projects</h1>
-                <p className="muted" style={{ fontSize: 14.5, marginTop: 4 }}>{HISTORY.length} projects · 1 running</p>
+                <p className="muted" style={{ fontSize: 14.5, marginTop: 4 }}>
+                  {loading ? "Loading…" : `${projects.length} project${projects.length === 1 ? "" : "s"}${runningCount ? ` · ${runningCount} running` : ""}`}
+                </p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <Segmented<"grid" | "list"> size="sm" options={[{ value: "grid", label: "Grid", icon: "grid" }, { value: "list", label: "List", icon: "list" }]} value={view} onChange={setView} />
-                <Btn kind="ghost" size="sm" onClick={() => setEmpty(!empty)}>{empty ? "Show projects" : "Preview empty"}</Btn>
+                <Btn kind="ghost" size="sm" onClick={() => setPreviewEmpty(!previewEmpty)}>{previewEmpty ? "Show projects" : "Preview empty"}</Btn>
                 <Btn kind="primary" icon="plus" onClick={backHome}>New project</Btn>
               </div>
             </div>
 
-            {empty ? (
+            {loading ? (
+              <Card style={{ padding: 40, textAlign: "center" }}>
+                <p className="muted" style={{ fontSize: 13.5 }}>Loading projects…</p>
+              </Card>
+            ) : showEmpty ? (
               <Card style={{ padding: 0 }}>
                 <Empty icon="folder" title="No projects yet" body="Set a research goal and the swarm will assemble a team, do the work, and hand you a finished file." action={<Btn kind="primary" icon="wand" onClick={backHome}>Start your first project</Btn>} />
               </Card>
             ) : view === "grid" ? (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-                {HISTORY.map((p) => <HistoryCard key={p.id} p={p} onOpen={backHome} />)}
+                {projects.map((p) => <HistoryCard key={p.id} p={p} onOpen={backHome} />)}
               </div>
             ) : (
               <Card style={{ padding: 0, overflow: "hidden" }}>
-                {HISTORY.map((p, i) => {
+                {projects.map((p, i) => {
                   const st = HSTATUS[p.status];
                   return (
                     <div key={p.id} onClick={backHome} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderTop: i ? "1px solid var(--border-soft)" : "none", cursor: "pointer" }}
