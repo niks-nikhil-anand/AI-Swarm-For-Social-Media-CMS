@@ -28,27 +28,33 @@ const TWEAK_DEFAULTS: Tweaks = { theme: "dark", accent: "blue", density: "comfor
 
 /* ---- appearance tweaks, persisted to localStorage ---- */
 function readTweaks(defaults: Tweaks): Tweaks {
-  if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem("swarm-tweaks");
     return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
   } catch { return defaults; }
 }
+// useSyncExternalStore returns `getServerSnapshot` for both the server render
+// and the initial client hydration pass, then resolves to the real
+// client-only value synchronously before paint — this is what avoids the
+// hydration mismatch without a setState-in-effect.
+const tweaksListeners = new Set<() => void>();
+let tweaksCache: Tweaks | null = null;
+function subscribeTweaks(cb: () => void) {
+  tweaksListeners.add(cb);
+  return () => { tweaksListeners.delete(cb); };
+}
+function getTweaksSnapshot(defaults: Tweaks): Tweaks {
+  if (!tweaksCache) tweaksCache = readTweaks(defaults);
+  return tweaksCache;
+}
 function useTweaks(defaults: Tweaks): [Tweaks, (k: keyof Tweaks, v: string | number) => void] {
-  const [t, setT] = useState<Tweaks>(defaults);
-  useEffect(() => {
-    // localStorage is only readable on the client — sync the persisted value
-    // in after mount so the SSR/hydration render matches (both start from
-    // `defaults`) instead of branching on `typeof window` in the initializer.
-    setT(readTweaks(defaults));
-  }, [defaults]);
+  const t = useSyncExternalStore(subscribeTweaks, () => getTweaksSnapshot(defaults), () => defaults);
   const setTweak = useCallback((k: keyof Tweaks, v: string | number) => {
-    setT((prev) => {
-      const next = { ...prev, [k]: v };
-      try { localStorage.setItem("swarm-tweaks", JSON.stringify(next)); } catch { /* ignore */ }
-      return next;
-    });
-  }, []);
+    const next = { ...getTweaksSnapshot(defaults), [k]: v };
+    try { localStorage.setItem("swarm-tweaks", JSON.stringify(next)); } catch { /* ignore */ }
+    tweaksCache = next;
+    tweaksListeners.forEach((l) => l());
+  }, [defaults]);
   return [t, setTweak];
 }
 
@@ -73,16 +79,9 @@ function Toasts({ items, onDismiss }: { items: Toast[]; onDismiss: (id: number) 
   );
 }
 
-function readAuthed(): boolean {
-  if (typeof window === "undefined") return false;
-  try { return localStorage.getItem("swarm-authed") === "1"; } catch { return false; }
-}
-
 export default function SwarmApp() {
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [authed, setAuthed] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
   const [screen, setScreen] = useState("define");
   const [, setFlowScreen] = useState("define");
   const [activeSession, setActiveSession] = useState<string | null>(null);
@@ -99,15 +98,6 @@ export default function SwarmApp() {
     r.setAttribute("data-density", t.density);
     r.style.setProperty("--mo", String((t.motion ?? 60) / 100));
   }, [t.theme, t.accent, t.density, t.motion]);
-
-  useEffect(() => {
-    // `readAuthed` only means something on the client — read it after mount
-    // so the SSR/hydration render (always `false`) matches the initial
-    // client render, instead of branching on `typeof window` up front.
-    setAuthed(readAuthed());
-    setAuthChecked(true);
-  }, []);
-  useEffect(() => { if (authChecked && !authed) router.push("/login"); }, [authChecked, authed, router]);
 
   const pushToast = useCallback((toast: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
@@ -129,8 +119,6 @@ export default function SwarmApp() {
     if (id === "p1") { openLive(); return; }
     setActiveSession(id); setScreen("session");
   }
-
-  if (!authed) return null;
 
   const PROJECT_TITLE = "Quantum computing × cryptography";
   const TITLES: Record<string, string> = { session: "Projects" };
