@@ -2,7 +2,7 @@
 /* ============================================================
    SWARM — Settings (standalone route)
    ============================================================ */
-import { useState, useEffect, useCallback, type CSSProperties, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Icon, Btn, IconBtn, Badge, Card, Segmented, Toggle } from "../../components/swarm/ui";
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
@@ -14,21 +14,33 @@ const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboar
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
 const TWEAK_DEFAULTS: Tweaks = { theme: "dark", accent: "blue", density: "comfortable", motion: 60 };
 function readTweaks(defaults: Tweaks): Tweaks {
-  if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem("swarm-tweaks");
     return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
   } catch { return defaults; }
 }
+// useSyncExternalStore returns `getServerSnapshot` for both the server render
+// and the initial client hydration pass, then resolves to the real
+// client-only value synchronously before paint — this is what avoids the
+// hydration mismatch without a setState-in-effect.
+const tweaksListeners = new Set<() => void>();
+let tweaksCache: Tweaks | null = null;
+function subscribeTweaks(cb: () => void) {
+  tweaksListeners.add(cb);
+  return () => { tweaksListeners.delete(cb); };
+}
+function getTweaksSnapshot(defaults: Tweaks): Tweaks {
+  if (!tweaksCache) tweaksCache = readTweaks(defaults);
+  return tweaksCache;
+}
 function useTweaks(defaults: Tweaks): [Tweaks, (k: keyof Tweaks, v: string | number) => void] {
-  const [t, setT] = useState<Tweaks>(() => readTweaks(defaults));
+  const t = useSyncExternalStore(subscribeTweaks, () => getTweaksSnapshot(defaults), () => defaults);
   const setTweak = useCallback((k: keyof Tweaks, v: string | number) => {
-    setT((prev) => {
-      const next = { ...prev, [k]: v };
-      try { localStorage.setItem("swarm-tweaks", JSON.stringify(next)); } catch { /* ignore */ }
-      return next;
-    });
-  }, []);
+    const next = { ...getTweaksSnapshot(defaults), [k]: v };
+    try { localStorage.setItem("swarm-tweaks", JSON.stringify(next)); } catch { /* ignore */ }
+    tweaksCache = next;
+    tweaksListeners.forEach((l) => l());
+  }, [defaults]);
   return [t, setTweak];
 }
 
