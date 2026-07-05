@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual, createHmac } from "node:crypto";
+import { cookies } from "next/headers";
 
 const SESSION_COOKIE = "swarm-session";
 const SESSION_MAX_AGE = 60 * 60 * 24; // 24h, matches the "sessions expire after 24h" copy on Login/Register
@@ -37,6 +38,12 @@ export function verifySession(token: string): string | null {
   const b = Buffer.from(expected, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   return userId;
+}
+
+export async function getCurrentUserId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  return token ? verifySession(token) : null;
 }
 
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;

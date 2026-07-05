@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Icon, Btn, IconBtn, Badge, Card, Segmented, Toggle } from "../../components/swarm/ui";
-import { Sidebar, TopBar } from "../../components/swarm/Shell";
+import { Sidebar, TopBar, useCurrentUser, initialsOf } from "../../components/swarm/Shell";
 import { PROVIDERS, DEFAULT_AGENT_ROSTER, type Agent } from "../../components/swarm/data";
 
 const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
@@ -229,6 +229,7 @@ function AddAgentModal({ roster, onClose, onAdd }: { roster: Agent[]; onClose: (
 
 export default function SettingsPage() {
   const router = useRouter();
+  const user = useCurrentUser();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   useEffect(() => {
@@ -337,8 +338,8 @@ export default function SettingsPage() {
 
             <Card style={{ padding: "4px 20px" }}>
               <div style={{ padding: "16px 0 8px" }}><span className="eyebrow">Account</span></div>
-              <SettingRow label="Avery Chen" desc="avery@anthropic.com · Pro plan">
-                <div style={{ width: 38, height: 38, borderRadius: 999, background: "linear-gradient(135deg, var(--accent-2), var(--accent))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 }}>AC</div>
+              <SettingRow label={user?.name || (user ? "Swarm user" : "Loading…")} desc={user?.email || ""}>
+                <div style={{ width: 38, height: 38, borderRadius: 999, background: "linear-gradient(135deg, var(--accent-2), var(--accent))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 }}>{user ? initialsOf(user) : ""}</div>
               </SettingRow>
               <SettingRow label="Notifications" desc="Email me when a long-running swarm finishes.">
                 <NotifToggle />
