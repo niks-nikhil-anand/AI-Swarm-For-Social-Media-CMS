@@ -30,6 +30,8 @@ function useTweaks(defaults: Tweaks): [Tweaks, (k: keyof Tweaks, v: string | num
   return [t, setTweak];
 }
 
+const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
+
 const HSTATUS: Record<string, { label: string; color: string; dot: string }> = {
   running:  { label: "Running", color: "var(--st-working)", dot: "working" },
   complete: { label: "Complete", color: "var(--st-done)", dot: "done" },
@@ -98,7 +100,7 @@ export default function ProjectsPage() {
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view="history" activeSession={null}
-        onNew={backHome} onGo={({ view }) => { if (view !== "history") backHome(); }} onOpenSession={backHome} />
+        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar stages={null} stage="history" reached={["history"]} onJump={() => {}} status={null} title="Projects" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
         <div style={{ overflow: "auto", height: "100%", padding: "32px 24px" }}>
