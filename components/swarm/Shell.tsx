@@ -2,9 +2,30 @@
 /* ============================================================
    SWARM — App shell (Sidebar + TopBar)
    ============================================================ */
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Logo, Icon, IconBtn, Btn, StatusDot, Stepper, type Stage } from "./ui";
 import { HISTORY } from "./data";
+
+interface CurrentUser { id: string; email: string; name: string | null }
+
+function initialsOf(user: CurrentUser): string {
+  if (user.name?.trim()) {
+    const parts = user.name.trim().split(/\s+/);
+    return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+  }
+  return user.email[0]?.toUpperCase() || "?";
+}
+
+function useCurrentUser(): CurrentUser | null {
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setUser(data))
+      .catch(() => setUser(null));
+  }, []);
+  return user;
+}
 
 function NavItem({ icon, label, active, onClick, count, badge }: {
   icon: string; label: string; active?: boolean; onClick?: () => void; count?: number; badge?: boolean;
@@ -32,6 +53,7 @@ export function Sidebar({ view, activeSession, onNew, onGo, onOpenSession }: {
   view: string; activeSession: string | null; onNew: () => void;
   onGo: (a: { view: string }) => void; onOpenSession: (id: string) => void;
 }) {
+  const user = useCurrentUser();
   return (
     <aside style={{
       width: "var(--nav-w)", flexShrink: 0, height: "100%", boxSizing: "border-box",
@@ -75,10 +97,10 @@ export function Sidebar({ view, activeSession, onNew, onGo, onOpenSession }: {
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
         <NavItem icon="settings" label="Settings" active={view === "settings"} onClick={() => onGo({ view: "settings" })} />
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 8px 4px", marginTop: 4 }}>
-          <div style={{ width: 30, height: 30, borderRadius: "var(--r-pill)", background: "linear-gradient(135deg, var(--accent-2), var(--accent))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>AC</div>
+          <div style={{ width: 30, height: 30, borderRadius: "var(--r-pill)", background: "linear-gradient(135deg, var(--accent-2), var(--accent))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{user ? initialsOf(user) : ""}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>Avery Chen</div>
-            <div style={{ fontSize: 11, color: "var(--faint)" }}>Pro · Anthropic</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.name || (user ? "Swarm user" : "Loading…")}</div>
+            <div style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.email || ""}</div>
           </div>
           <IconBtn name="more-horizontal" size={28} title="Account" />
         </div>
