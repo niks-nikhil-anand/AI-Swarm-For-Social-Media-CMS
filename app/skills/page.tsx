@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef, useSyncExternalStore, type CS
 import { useRouter } from "next/navigation";
 import { Icon, Btn, IconBtn, Badge, Card, Empty } from "../../components/swarm/ui";
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
-import { DEFAULT_SKILLS, SKILL_CATEGORIES, SKILL_CATEGORY_ICON, type Skill, type SkillCategory } from "../../components/swarm/data";
+import { SKILL_CATEGORIES, SKILL_CATEGORY_ICON, type Skill, type SkillCategory } from "../../components/swarm/data";
 
 const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
 
@@ -71,7 +71,9 @@ function CategoryPick({ value, onChange }: { value: SkillCategory; onChange: (c:
   );
 }
 
-function UploadSkillModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Skill) => void }) {
+interface NewSkill { name: string; description: string; category: SkillCategory; version: string; fileName: string; fileSize: number }
+
+function UploadSkillModal({ onClose, onAdd, submitting }: { onClose: () => void; onAdd: (s: NewSkill) => void; submitting: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
@@ -86,13 +88,11 @@ function UploadSkillModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: 
 
   function submit() {
     onAdd({
-      id: "skill-" + Date.now(),
       name: name.trim(),
       description: description.trim() || "No description provided.",
       category, version: version.trim() || "1.0.0",
       fileName: file?.name || "untitled-skill.json",
       fileSize: file?.size ?? 0,
-      uploadedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
     });
   }
 
@@ -143,7 +143,7 @@ function UploadSkillModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: 
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 22 }}>
           <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn kind="primary" icon="cloud-upload" disabled={!name.trim()} onClick={submit}>Upload skill</Btn>
+          <Btn kind="primary" icon="cloud-upload" disabled={!name.trim() || submitting} onClick={submit}>{submitting ? "Uploading…" : "Upload skill"}</Btn>
         </div>
       </div>
     </div>
@@ -180,6 +180,40 @@ function SkillRow({ s, first, onDelete }: { s: Skill; first: boolean; onDelete: 
   );
 }
 
+interface CommunitySkill extends Skill { uploadedBy: string }
+
+const COMMUNITY_GRID = "minmax(0,2fr) 0.9fr 0.9fr 0.6fr 1fr 0.9fr 0.6fr";
+
+function CommunitySkillRow({ s, first }: { s: CommunitySkill; first: boolean }) {
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: COMMUNITY_GRID, alignItems: "center",
+      padding: "12px 20px", borderTop: first ? "none" : "1px solid var(--border-soft)", gap: 8,
+    }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <span style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--elevated)", border: "1px solid var(--border)", color: "var(--accent)" }}>
+          <Icon name={SKILL_CATEGORY_ICON[s.category]} size={14} />
+        </span>
+        <span style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
+          <div className="faint" style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.description}</div>
+        </span>
+      </span>
+      <span><Badge tone="accent" icon={SKILL_CATEGORY_ICON[s.category]}>{s.category}</Badge></span>
+      <span style={{ fontSize: 12.5, color: "var(--text-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.uploadedBy}</span>
+      <span className="mono" style={{ fontSize: 12.5, color: "var(--text-2)" }}>v{s.version}</span>
+      <span style={{ minWidth: 0 }}>
+        <div className="mono" style={{ fontSize: 12.5, color: "var(--text-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.fileName}</div>
+        <div className="faint" style={{ fontSize: 11 }}>{fmtSize(s.fileSize)}</div>
+      </span>
+      <span className="faint" style={{ fontSize: 12.5 }}>{s.uploadedAt}</span>
+      <span style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+        <IconBtn name="download" size={28} title="Download" />
+      </span>
+    </div>
+  );
+}
+
 export default function SkillsPage() {
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
@@ -192,9 +226,50 @@ export default function SkillsPage() {
     r.style.setProperty("--mo", String((t.motion ?? 60) / 100));
   }, [t.theme, t.accent, t.density, t.motion]);
 
-  const [skills, setSkills] = useState<Skill[]>(DEFAULT_SKILLS);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [modal, setModal] = useState(false);
+  const [communitySkills, setCommunitySkills] = useState<CommunitySkill[]>([]);
+  const [communityLoading, setCommunityLoading] = useState(true);
   const backHome = () => router.push("/");
+
+  useEffect(() => {
+    fetch("/api/skills")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setSkills)
+      .catch(() => setSkills([]))
+      .finally(() => setLoading(false));
+
+    fetch("/api/skills/community")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setCommunitySkills)
+      .catch(() => setCommunitySkills([]))
+      .finally(() => setCommunityLoading(false));
+  }, []);
+
+  async function addSkill(data: NewSkill) {
+    setUploading(true);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const created: Skill = await res.json();
+        setSkills((prev) => [created, ...prev]);
+        setModal(false);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function deleteSkill(id: string) {
+    setSkills((prev) => prev.filter((s) => s.id !== id));
+    await fetch(`/api/skills/${id}`, { method: "DELETE" }).catch(() => {});
+  }
 
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
@@ -212,7 +287,11 @@ export default function SkillsPage() {
               <Btn kind="primary" icon="cloud-upload" onClick={() => setModal(true)}>Upload skill</Btn>
             </div>
 
-            {skills.length === 0 ? (
+            {loading ? (
+              <Card style={{ padding: 40, textAlign: "center" }}>
+                <p className="muted" style={{ fontSize: 13.5 }}>Loading skills…</p>
+              </Card>
+            ) : skills.length === 0 ? (
               <Card style={{ padding: 0 }}>
                 <Empty icon="tools" title="No skills yet" body="Upload a skill file to make a new capability available to your agents." action={<Btn kind="primary" icon="cloud-upload" onClick={() => setModal(true)}>Upload skill</Btn>} />
               </Card>
@@ -222,14 +301,38 @@ export default function SkillsPage() {
                   <span>Skill</span><span>Category</span><span>Version</span><span>File</span><span>Uploaded</span><span style={{ textAlign: "right" }}>Actions</span>
                 </div>
                 {skills.map((s, i) => (
-                  <SkillRow key={s.id} s={s} first={i === 0} onDelete={() => setSkills((prev) => prev.filter((x) => x.id !== s.id))} />
+                  <SkillRow key={s.id} s={s} first={i === 0} onDelete={() => deleteSkill(s.id)} />
+                ))}
+              </Card>
+            )}
+
+            <div style={{ marginTop: 32, marginBottom: 22 }}>
+              <h2 className="h3">Community</h2>
+              <p className="muted" style={{ fontSize: 13.5, marginTop: 4 }}>Skills uploaded by other Swarm users · {communitySkills.length} available</p>
+            </div>
+
+            {communityLoading ? (
+              <Card style={{ padding: 40, textAlign: "center" }}>
+                <p className="muted" style={{ fontSize: 13.5 }}>Loading community skills…</p>
+              </Card>
+            ) : communitySkills.length === 0 ? (
+              <Card style={{ padding: 0 }}>
+                <Empty icon="users" title="No community skills yet" body="Skills other Swarm users upload will show up here." />
+              </Card>
+            ) : (
+              <Card style={{ padding: 0, overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: COMMUNITY_GRID, padding: "10px 20px", borderBottom: "1px solid var(--border-soft)", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--faint)", gap: 8 }}>
+                  <span>Skill</span><span>Category</span><span>Uploaded by</span><span>Version</span><span>File</span><span>Uploaded</span><span style={{ textAlign: "right" }}>Actions</span>
+                </div>
+                {communitySkills.map((s, i) => (
+                  <CommunitySkillRow key={s.id} s={s} first={i === 0} />
                 ))}
               </Card>
             )}
           </div>
         </div>
       </main>
-      {modal && <UploadSkillModal onClose={() => setModal(false)} onAdd={(s) => { setSkills((prev) => [s, ...prev]); setModal(false); }} />}
+      {modal && <UploadSkillModal onClose={() => setModal(false)} onAdd={addSkill} submitting={uploading} />}
     </div>
   );
 }

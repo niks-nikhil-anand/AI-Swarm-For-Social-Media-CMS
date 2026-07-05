@@ -4,9 +4,28 @@
    ============================================================ */
 import { useState, useEffect, useCallback, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Icon, Btn, Badge, Card, Bar, StatusDot, Segmented } from "../../components/swarm/ui";
+import { Icon, Btn, Card, Bar, StatusDot, Segmented } from "../../components/swarm/ui";
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
-import { USAGE, HISTORY } from "../../components/swarm/data";
+import { FORMATS, type ProjectStatus } from "../../components/swarm/data";
+
+interface Usage {
+  monthSpend: number; monthBudget: number; lastMonth: number;
+  totals: { tokens: number; tokensIn: number; tokensOut: number; searches: number; projects: number; requests: number };
+  deltas: { spend: number; tokens: number; searches: number; projects: number };
+  spendSeries: number[];
+}
+interface ApiProject { id: string; title: string; format: string; status: string; cost: number; tokensIn: number; tokensOut: number; searches: number }
+interface SpendRow { id: string; title: string; fmtIcon: string; accent: string; status: ProjectStatus; cost: number; tokIn: number; tokOut: number; searches: number }
+
+const STATUS_MAP: Record<string, ProjectStatus> = { Draft: "running", Running: "running", Complete: "complete", Failed: "failed" };
+
+function toSpendRow(row: ApiProject): SpendRow {
+  const fmt = FORMATS.find((f) => f.id === row.format);
+  return {
+    id: row.id, title: row.title, fmtIcon: fmt?.icon || "file-text", accent: "var(--accent)",
+    status: STATUS_MAP[row.status] || "running", cost: row.cost, tokIn: row.tokensIn, tokOut: row.tokensOut, searches: row.searches,
+  };
+}
 
 /* ---- appearance tweaks, persisted to localStorage (mirrors SwarmApp) ---- */
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
@@ -48,7 +67,7 @@ function money(n: number) { return "$" + n.toFixed(2); }
 
 function SpendArea({ data, color = "var(--accent)" }: { data: number[]; color?: string }) {
   const W = 640, H = 170, pad = 8;
-  const max = Math.max(...data) * 1.15;
+  const max = Math.max(...data, 1) * 1.15;
   const step = (W - pad * 2) / (data.length - 1);
   const pts = data.map((v, i) => [pad + i * step, H - pad - (v / max) * (H - pad * 2)]);
   const line = pts.map((p, i) => `${i ? "L" : "M"} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
@@ -94,25 +113,6 @@ function Kpi({ label, value, unit, delta, children }: { label: string; value: Re
   );
 }
 
-function CostList({ rows }: { rows: { name: string; note?: string; cost: number; color: string }[] }) {
-  const max = Math.max(...rows.map((r) => r.cost));
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-      {rows.map((r) => (
-        <div key={r.name}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "nowrap" }}>
-            <span style={{ width: 8, height: 8, borderRadius: 3, background: r.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", whiteSpace: "nowrap", flexShrink: 0 }}>{r.name}</span>
-            {r.note && <span className="faint" style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{r.note}</span>}
-            <span className="mono" style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--text-2)", flexShrink: 0, paddingLeft: 8 }}>{money(r.cost)}</span>
-          </div>
-          <Bar value={(r.cost / max) * 100} color={r.color} height={5} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
@@ -126,10 +126,45 @@ export default function DashboardPage() {
   }, [t.theme, t.accent, t.density, t.motion]);
 
   const [period, setPeriod] = useState("30d");
-  const u = USAGE;
-  const remaining = u.monthBudget - u.monthSpend;
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [rows, setRows] = useState<SpendRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const HSTATUS: Record<string, [string, string]> = { running: ["Running", "working"], complete: ["Complete", "done"], failed: ["Failed", "error"] };
   const backHome = () => router.push("/");
+  const billingPeriod = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/usage").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/projects").then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([u, projectRows]: [Usage | null, ApiProject[]]) => {
+        setUsage(u);
+        setRows(projectRows.map(toSpendRow));
+      })
+      .catch(() => { setUsage(null); setRows([]); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !usage) {
+    return (
+      <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
+        <Sidebar view="dashboard" activeSession={null}
+          onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+          <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & cost" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
+          <div style={{ padding: "32px 24px" }}>
+            <Card style={{ padding: 40, textAlign: "center" }}>
+              <p className="muted" style={{ fontSize: 13.5 }}>Loading usage…</p>
+            </Card>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const u = usage;
+  const remaining = u.monthBudget - u.monthSpend;
 
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
@@ -142,7 +177,7 @@ export default function DashboardPage() {
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 16, flexWrap: "wrap" }}>
               <div>
                 <h1 className="h1">Usage &amp; cost</h1>
-                <p className="muted" style={{ fontSize: 14.5, marginTop: 4 }}>API spend, tokens and search across all swarms · billing period May 2026</p>
+                <p className="muted" style={{ fontSize: 14.5, marginTop: 4 }}>API spend, tokens and search across all swarms · billing period {billingPeriod}</p>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <Segmented<string> size="sm" options={[{ value: "7d", label: "7d" }, { value: "30d", label: "30d" }, { value: "90d", label: "90d" }]} value={period} onChange={setPeriod} />
@@ -160,14 +195,14 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </Kpi>
-              <Kpi label="Tokens used" value={u.totals.tokens} unit="M" delta={u.deltas.tokens}>
-                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>≈ 14.8M in · 3.6M out</div>
+              <Kpi label="Tokens used" value={u.totals.tokens.toFixed(1)} unit="M" delta={u.deltas.tokens}>
+                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>≈ {u.totals.tokensIn.toFixed(1)}M in · {u.totals.tokensOut.toFixed(1)}M out</div>
               </Kpi>
               <Kpi label="Web searches" value={u.totals.searches} delta={u.deltas.searches}>
-                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>across {u.totals.projects} projects</div>
+                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>across {u.totals.projects} project{u.totals.projects === 1 ? "" : "s"}</div>
               </Kpi>
               <Kpi label="API requests" value={u.totals.requests.toLocaleString()} delta={u.deltas.projects}>
-                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>avg {money(u.monthSpend / u.totals.projects)} / project</div>
+                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>avg {u.totals.projects > 0 ? money(u.monthSpend / u.totals.projects) : "$0.00"} / project</div>
               </Kpi>
             </div>
 
@@ -193,16 +228,14 @@ export default function DashboardPage() {
               <Card style={{ padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                   <span className="h4">Cost by model &amp; service</span>
-                  <Badge tone="neutral">{money(u.byModel.reduce((a, b) => a + b.cost, 0))}</Badge>
                 </div>
-                <CostList rows={u.byModel} />
+                <p className="muted" style={{ fontSize: 13 }}>No spend recorded yet — a per-model cost breakdown will appear once agents run.</p>
               </Card>
               <Card style={{ padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                   <span className="h4">Cost by agent role</span>
-                  <Badge tone="neutral">{money(u.byAgent.reduce((a, b) => a + b.cost, 0))}</Badge>
                 </div>
-                <CostList rows={u.byAgent} />
+                <p className="muted" style={{ fontSize: 13 }}>No spend recorded yet — a per-agent cost breakdown will appear once agents run.</p>
               </Card>
             </div>
 
@@ -210,31 +243,39 @@ export default function DashboardPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
                 <span className="h4">Spend by project</span>
                 <div style={{ flex: 1 }} />
-                <span className="faint" style={{ fontSize: 12 }}>{HISTORY.length} recent runs</span>
+                <span className="faint" style={{ fontSize: 12 }}>{rows.length} recent run{rows.length === 1 ? "" : "s"}</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,2.4fr) 1fr 1fr 1fr 0.8fr", padding: "10px 20px", borderBottom: "1px solid var(--border-soft)", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--faint)" }}>
-                <span>Project</span><span>Status</span><span style={{ textAlign: "right" }}>Tokens</span><span style={{ textAlign: "right" }}>Searches</span><span style={{ textAlign: "right" }}>Cost</span>
-              </div>
-              {HISTORY.map((p, i) => {
-                const [lab, dot] = HSTATUS[p.status];
-                return (
-                  <button key={p.id} onClick={backHome} style={{
-                    display: "grid", gridTemplateColumns: "minmax(0,2.4fr) 1fr 1fr 1fr 0.8fr", alignItems: "center", width: "100%",
-                    padding: "12px 20px", border: "none", borderTop: i ? "1px solid var(--border-soft)" : "none", background: "transparent",
-                    cursor: "pointer", textAlign: "left", fontFamily: "var(--font)",
-                  }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--elevated)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--elevated)", color: p.accent }}><Icon name={p.fmtIcon} size={13} /></span>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.title}</span>
-                    </span>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-2)" }}><StatusDot status={dot} size={6} />{lab}</span>
-                    <span className="mono" style={{ fontSize: 12.5, color: "var(--text-2)", textAlign: "right" }}>{((p.tokIn + p.tokOut) / 1e6).toFixed(2)}M</span>
-                    <span className="mono" style={{ fontSize: 12.5, color: "var(--text-2)", textAlign: "right" }}>{p.searches}</span>
-                    <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", textAlign: "right" }}>{money(p.cost)}</span>
-                  </button>
-                );
-              })}
+              {rows.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center" }}>
+                  <p className="muted" style={{ fontSize: 13.5 }}>No projects yet.</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0,2.4fr) 1fr 1fr 1fr 0.8fr", padding: "10px 20px", borderBottom: "1px solid var(--border-soft)", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--faint)" }}>
+                    <span>Project</span><span>Status</span><span style={{ textAlign: "right" }}>Tokens</span><span style={{ textAlign: "right" }}>Searches</span><span style={{ textAlign: "right" }}>Cost</span>
+                  </div>
+                  {rows.map((p, i) => {
+                    const [lab, dot] = HSTATUS[p.status];
+                    return (
+                      <button key={p.id} onClick={backHome} style={{
+                        display: "grid", gridTemplateColumns: "minmax(0,2.4fr) 1fr 1fr 1fr 0.8fr", alignItems: "center", width: "100%",
+                        padding: "12px 20px", border: "none", borderTop: i ? "1px solid var(--border-soft)" : "none", background: "transparent",
+                        cursor: "pointer", textAlign: "left", fontFamily: "var(--font)",
+                      }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "var(--elevated)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                          <span style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--elevated)", color: p.accent }}><Icon name={p.fmtIcon} size={13} /></span>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.title}</span>
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-2)" }}><StatusDot status={dot} size={6} />{lab}</span>
+                        <span className="mono" style={{ fontSize: 12.5, color: "var(--text-2)", textAlign: "right" }}>{((p.tokIn + p.tokOut) / 1e6).toFixed(2)}M</span>
+                        <span className="mono" style={{ fontSize: 12.5, color: "var(--text-2)", textAlign: "right" }}>{p.searches}</span>
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", textAlign: "right" }}>{money(p.cost)}</span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </Card>
           </div>
         </div>
