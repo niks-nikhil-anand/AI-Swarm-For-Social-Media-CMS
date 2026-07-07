@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { getCurrentUserId } from "../../../lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
+  const requestedDays = Number(request.nextUrl.searchParams.get("days"));
+  const days = [7, 30, 90].includes(requestedDays) ? requestedDays : null;
+  const periodStart = days ? new Date() : null;
+  if (periodStart && days) {
+    periodStart.setHours(0, 0, 0, 0);
+    periodStart.setDate(periodStart.getDate() - (days - 1));
+  }
+
   const projects = await prisma.project.findMany({
-    where: { userId },
+    where: { userId, ...(periodStart ? { createdAt: { gte: periodStart } } : {}) },
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { agents: true, sources: true } } },
   });
