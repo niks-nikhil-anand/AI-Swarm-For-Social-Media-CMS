@@ -175,6 +175,617 @@ flowchart TB
 
 Solid arrows represent implemented paths. Dotted arrows represent planned integrations.
 
+## Scalable Architecture for 1M+ Users
+
+This section outlines the production-grade infrastructure required to safely and reliably serve 1 million+ concurrent users at scale.
+
+### High-Level Infrastructure
+
+```mermaid
+flowchart TB
+    CDN["CDN / CloudFlare<br/>Static assets, caching"]
+    
+    subgraph "API Gateway Layer"
+        LB["Load Balancer<br/>Rate limiting, SSL/TLS"]
+    end
+    
+    subgraph "Compute Layer (Auto-scaled)"
+        API1["Next.js API 1"]
+        API2["Next.js API 2"]
+        API3["Next.js API N"]
+    end
+    
+    subgraph "Session & Cache Layer"
+        Redis["Redis Cluster<br/>Sessions, Cache<br/>Rate limit counters"]
+    end
+    
+    subgraph "Database Layer (Primary + Replicas)"
+        DBPrimary["PostgreSQL Primary<br/>Write operations"]
+        DBRead1["PostgreSQL Read Replica 1"]
+        DBRead2["PostgreSQL Read Replica 2"]
+        DBRead3["PostgreSQL Read Replica N"]
+    end
+    
+    subgraph "Temporal Distributed Workflow"
+        TemporalServer["Temporal Server Cluster<br/>High availability"]
+        ResearchQ["Research Queue"]
+        ReviewQ["Review Queue"]
+        OutputQ["Output Queue"]
+        SocialQ["Social Queue"]
+    end
+    
+    subgraph "Worker Pools (Auto-scaled)"
+        ResearchWorkers["Research Workers<br/>100+ instances"]
+        ReviewWorkers["Review Workers<br/>50+ instances"]
+        OutputWorkers["Document Workers<br/>50+ instances"]
+        SocialWorkers["Social Workers<br/>30+ instances"]
+    end
+    
+    subgraph "External Services"
+        SearXNG["SearXNG Instance<br/>with caching"]
+        Postiz["Postiz API"]
+        LLMProviders["LLM Providers<br/>OpenRouter, etc"]
+    end
+    
+    subgraph "Storage Layer"
+        S3["Object Storage<br/>S3 / MinIO<br/>Artifacts, exports"]
+        SearchIndex["Elasticsearch<br/>Full-text search<br/>Evidence index"]
+    end
+    
+    subgraph "Monitoring & Logging"
+        Prometheus["Prometheus<br/>Metrics"]
+        Grafana["Grafana<br/>Dashboards"]
+        ELK["ELK Stack<br/>Logs, tracing"]
+    end
+    
+    CDN --> LB
+    LB --> API1 & API2 & API3
+    API1 & API2 & API3 --> Redis
+    API1 & API2 & API3 --> DBRead1 & DBRead2 & DBRead3
+    API1 & API2 & API3 -->|writes| DBPrimary
+    API1 & API2 & API3 --> TemporalServer
+    
+    TemporalServer --> ResearchQ & ReviewQ & OutputQ & SocialQ
+    ResearchQ --> ResearchWorkers
+    ReviewQ --> ReviewWorkers
+    OutputQ --> OutputWorkers
+    SocialQ --> SocialWorkers
+    
+    ResearchWorkers --> SearXNG & LLMProviders & DBPrimary
+    ReviewWorkers --> LLMProviders & DBPrimary
+    OutputWorkers --> S3 & LLMProviders & DBPrimary
+    SocialWorkers --> Postiz & DBPrimary
+    
+    DBPrimary -.->|replication| DBRead1 & DBRead2 & DBRead3
+    API1 & API2 & API3 --> SearchIndex
+    
+    API1 & API2 & API3 & ResearchWorkers & ReviewWorkers & OutputWorkers & SocialWorkers --> Prometheus
+    Prometheus --> Grafana
+    API1 & API2 & API3 & ResearchWorkers & ReviewWorkers & OutputWorkers & SocialWorkers --> ELK
+```
+
+### 1. Load Balancing & API Gateway
+
+**Purpose:** Distribute traffic across multiple API instances, enforce rate limits, handle SSL/TLS termination.
+
+```yaml
+Load Balancer Configuration:
+  - Type: AWS ALB or NGINX Plus
+  - Health checks: /health endpoint (should check DB connectivity)
+  - Sticky sessions: Use Redis for session affinity
+  - Rate limiting: 1000 requests/user/hour
+  - SSL/TLS: Auto-renew with Let's Encrypt
+  - Compression: gzip, brotli for responses > 1KB
+```
+
+**Implementation:**
+```typescript
+// app/api/health.ts - Health check endpoint
+export async function GET() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const redisHealth = await redis.ping();
+    
+    if (redisHealth === 'PONG') {
+      return Response.json({ status: 'healthy' }, { status: 200 });
+    }
+  } catch (error) {
+    return Response.json({ status: 'unhealthy', error: error.message }, { status: 503 });
+  }
+}
+```
+
+### 2. Compute Layer - Horizontal Scaling
+
+**Stateless Next.js API Instances:**
+- Deploy 10-50 instances based on traffic (Kubernetes or AWS ECS/Fargate)
+- CPU: 2 cores, Memory: 2GB per instance
+- Auto-scaling: Scale up at 70% CPU, scale down at 30% CPU
+- Container image: Use multi-stage Docker builds for minimal size
+
+```dockerfile
+# Dockerfile for Next.js
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/.next /app/.next
+COPY --from=builder /app/public /app/public
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/package*.json ./
+
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### 3. Session & Caching Layer - Redis Cluster
+
+**Redis Cluster Setup (High Availability):**
+- 6+ Redis nodes (master + slave replicas)
+- Memory: 64GB - 256GB depending on active sessions
+- TTL policies: Sessions expire after 30 days
+
+```typescript
+// lib/redis.ts - Redis client with clustering
+import { createClient } from 'redis';
+
+export const redis = createClient({
+  cluster: [
+    { host: process.env.REDIS_NODE_1, port: 6379 },
+    { host: process.env.REDIS_NODE_2, port: 6379 },
+    { host: process.env.REDIS_NODE_3, port: 6379 },
+  ],
+  password: process.env.REDIS_PASSWORD,
+});
+
+// Session storage strategy
+export async function setSession(sessionId: string, userId: string, ttl = 2592000) {
+  await redis.setEx(
+    `session:${sessionId}`,
+    ttl,
+    JSON.stringify({ userId, createdAt: Date.now() })
+  );
+}
+
+export async function getSession(sessionId: string) {
+  return redis.get(`session:${sessionId}`);
+}
+
+// Rate limiting with Redis
+export async function checkRateLimit(userId: string, limit = 1000) {
+  const key = `rate_limit:${userId}:${Math.floor(Date.now() / 3600000)}`;
+  const current = await redis.incr(key);
+  
+  if (current === 1) {
+    await redis.expire(key, 3600);
+  }
+  
+  return current <= limit;
+}
+
+// Caching layer
+export async function getCachedData(key: string, fetcher: () => Promise<any>, ttl = 300) {
+  const cached = await redis.get(key);
+  if (cached) return JSON.parse(cached);
+  
+  const data = await fetcher();
+  await redis.setEx(key, ttl, JSON.stringify(data));
+  return data;
+}
+```
+
+### 4. Database Layer - Sharding & Read Replicas
+
+**Database Topology:**
+- Primary PostgreSQL instance (write operations)
+- 3-5 read replicas (read queries, distributed across regions)
+- Streaming replication with <100ms latency
+
+**Sharding Strategy by User ID:**
+
+```prisma
+// prisma/schema.prisma - Shard-aware schema
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  shard_id        Int       @db.SmallInt // 0-255 for 256 shards
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  
+  @@index([shard_id])
+  @@index([email])
+}
+
+model Project {
+  id              String    @id @default(cuid())
+  user_id         String
+  shard_id        Int       @db.SmallInt
+  title           String
+  created_at      DateTime  @default(now())
+  
+  @@index([user_id, shard_id])
+  @@index([shard_id])
+}
+```
+
+**Shard Routing Logic:**
+
+```typescript
+// lib/shard.ts - Shard management
+export function getUserShardId(userId: string): number {
+  const hash = userId
+    .split('')
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return hash % 256; // 256 shards
+}
+
+export function getShardDatabaseUrl(shardId: number): string {
+  const shards: Record<number, string> = {
+    0: process.env.DB_SHARD_0!,
+    1: process.env.DB_SHARD_1!,
+    // ... more shards
+    255: process.env.DB_SHARD_255!,
+  };
+  return shards[shardId];
+}
+
+export function createShardedPrismaClient(userId: string) {
+  const shardId = getUserShardId(userId);
+  const databaseUrl = getShardDatabaseUrl(shardId);
+  
+  return new PrismaClient({
+    datasources: {
+      db: { url: databaseUrl },
+    },
+  });
+}
+```
+
+**Connection Pooling:**
+
+```yaml
+# PgBouncer configuration for connection pooling
+[databases]
+swarm_shard_0 = host=db-shard-0.internal port=5432 dbname=swarm_0
+swarm_shard_1 = host=db-shard-1.internal port=5432 dbname=swarm_1
+
+[pgbouncer]
+pool_mode = transaction
+max_client_conn = 10000
+default_pool_size = 50
+min_pool_size = 10
+reserve_pool_size = 5
+reserve_pool_timeout = 3
+```
+
+### 5. Message Queue & Temporal at Scale
+
+**Temporal Multi-cluster Setup:**
+
+```yaml
+Temporal Clusters:
+  - Primary cluster: 3-5 Temporal server nodes
+  - Regional failover: 2-3 nodes in secondary region
+  - Namespaces: One namespace per organization (isolation)
+  - Task queues:
+    * research:high - 100 max concurrent activities
+    * research:normal - 1000 max concurrent activities
+    * review:high - 50 max concurrent activities
+    * output:standard - 50 max concurrent activities
+    * social:batch - 30 max concurrent activities
+```
+
+**Worker Pool Configuration:**
+
+```typescript
+// workers/research-worker.ts - Temporal worker with auto-scaling
+import { Worker } from '@temporalio/worker';
+import { researchActivity, fetchPageActivity, extractEvidenceActivity } from './activities';
+
+export async function createResearchWorker(taskQueue: string) {
+  const worker = await Worker.create({
+    namespace: process.env.TEMPORAL_NAMESPACE,
+    taskQueue,
+    workflowsPath: require.resolve('./workflows'),
+    activities: {
+      researchActivity,
+      fetchPageActivity,
+      extractEvidenceActivity,
+    },
+    // Scaling configuration
+    maxConcurrentActivityTaskExecutions: 100,
+    maxConcurrentWorkflowTaskExecutions: 50,
+  });
+
+  await worker.run();
+}
+
+// Auto-scaling based on queue depth
+export async function getQueueMetrics(taskQueue: string) {
+  const client = new WorkflowClient();
+  const response = await client.describe(); // Returns queue depth
+  
+  return {
+    taskQueueDepth: response.taskQueueInfo?.approximateSize || 0,
+    expectedScaleOut: Math.ceil(response.taskQueueInfo?.approximateSize / 50),
+  };
+}
+```
+
+### 6. Storage Layer - Object Storage & Indexing
+
+**S3/MinIO Configuration:**
+
+```typescript
+// lib/storage.ts - Object storage client
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+
+export const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
+export async function storeArtifact(projectId: string, fileName: string, buffer: Buffer) {
+  const key = `projects/${projectId}/artifacts/${Date.now()}_${fileName}`;
+  
+  await s3.send(new PutObjectCommand({
+    Bucket: process.env.S3_BUCKET!,
+    Key: key,
+    Body: buffer,
+    ContentType: getContentType(fileName),
+    Metadata: {
+      projectId,
+      uploadedAt: new Date().toISOString(),
+    },
+    ServerSideEncryption: 'AES256',
+    // Enable versioning for recovery
+    VersionId: projectId,
+  }));
+  
+  return key;
+}
+
+export async function generateSignedUrl(key: string, expiresIn = 3600) {
+  const command = new GetObjectCommand({
+    Bucket: process.env.S3_BUCKET,
+    Key: key,
+  });
+  
+  return getSignedUrl(s3, command, { expiresIn });
+}
+```
+
+**Elasticsearch for Full-Text Search:**
+
+```typescript
+// lib/search.ts - Elasticsearch indexing
+import { Client } from '@elastic/elasticsearch';
+
+export const es = new Client({
+  node: process.env.ELASTICSEARCH_NODE,
+  auth: {
+    username: process.env.ES_USERNAME,
+    password: process.env.ES_PASSWORD,
+  },
+});
+
+export async function indexEvidence(projectId: string, evidence: Evidence) {
+  await es.index({
+    index: `evidence-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
+    document: {
+      projectId,
+      content: evidence.content,
+      source: evidence.source,
+      timestamp: new Date(),
+      shard_id: getUserShardId(evidence.userId),
+    },
+  });
+}
+
+export async function searchEvidence(userId: string, query: string) {
+  const result = await es.search({
+    index: 'evidence-*',
+    query: {
+      bool: {
+        must: [
+          { multi_match: { query, fields: ['content', 'source'] } },
+          { term: { 'shard_id': getUserShardId(userId) } },
+        ],
+      },
+    },
+    size: 50,
+  });
+  
+  return result.hits.hits;
+}
+```
+
+### 7. Monitoring & Observability
+
+**Metrics Collection (Prometheus):**
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'next-api'
+    static_configs:
+      - targets: ['localhost:9090']
+    
+  - job_name: 'temporal'
+    static_configs:
+      - targets: ['localhost:9090']
+    
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:9187']
+    
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:6379']
+```
+
+**Custom Metrics:**
+
+```typescript
+// lib/metrics.ts - Application metrics
+import { register, Counter, Histogram, Gauge } from 'prom-client';
+
+export const apiRequestDuration = new Histogram({
+  name: 'api_request_duration_ms',
+  help: 'API request duration in milliseconds',
+  labelNames: ['method', 'path', 'status'],
+  buckets: [10, 50, 100, 500, 1000, 5000],
+});
+
+export const dbQueryDuration = new Histogram({
+  name: 'db_query_duration_ms',
+  help: 'Database query duration',
+  labelNames: ['query_type', 'table'],
+  buckets: [1, 5, 10, 50, 100, 500],
+});
+
+export const activeUsers = new Gauge({
+  name: 'active_users_total',
+  help: 'Total active users',
+  labelNames: ['shard_id'],
+});
+
+export const workflowExecutionCounter = new Counter({
+  name: 'workflow_executions_total',
+  help: 'Total workflow executions',
+  labelNames: ['workflow_type', 'status'],
+});
+
+// Middleware for request tracking
+export function metricsMiddleware(req: NextRequest, res: NextResponse) {
+  const start = Date.now();
+  const originalStatus = res.status;
+  
+  return () => {
+    const duration = Date.now() - start;
+    apiRequestDuration
+      .labels(req.method, req.nextUrl.pathname, originalStatus)
+      .observe(duration);
+  };
+}
+```
+
+**Distributed Tracing (Jaeger/OpenTelemetry):**
+
+```typescript
+// lib/tracing.ts
+import { NodeTracerProvider } from '@opentelemetry/node';
+import { registerInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { JaegerExporter } from '@opentelemetry/exporter-jaeger';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+
+const jaegerExporter = new JaegerExporter({
+  endpoint: process.env.JAEGER_ENDPOINT,
+});
+
+const tracerProvider = new NodeTracerProvider();
+tracerProvider.addSpanProcessor(new BatchSpanProcessor(jaegerExporter));
+
+registerInstrumentations({ tracerProvider });
+```
+
+### 8. Implementation Roadmap for 1M+ Scale
+
+**Phase 1: Foundation (Weeks 1-4)**
+- [ ] Set up Redis cluster (sessions, caching, rate limiting)
+- [ ] Implement shard routing logic in Prisma client
+- [ ] Deploy load balancer with health checks
+- [ ] Add comprehensive logging (ELK stack)
+- [ ] Database read replicas with streaming replication
+
+**Phase 2: Worker Infrastructure (Weeks 5-8)**
+- [ ] Temporal multi-cluster setup with namespaces
+- [ ] Containerize all worker services
+- [ ] Implement Kubernetes deployment manifests
+- [ ] Auto-scaling policies for worker pools
+- [ ] Queue depth monitoring and alerts
+
+**Phase 3: Storage & Search (Weeks 9-12)**
+- [ ] S3/MinIO configuration for artifact storage
+- [ ] Elasticsearch cluster for evidence indexing
+- [ ] CDN integration for static assets
+- [ ] Archive old projects to cold storage (S3 Glacier)
+- [ ] Backup and disaster recovery procedures
+
+**Phase 4: Optimization (Weeks 13-16)**
+- [ ] Database query optimization (indexes, query plans)
+- [ ] API response caching strategies
+- [ ] Worker pool tuning based on metrics
+- [ ] Cost optimization review
+- [ ] Load testing with 1M+ simulated users
+
+**Phase 5: Production Hardening (Weeks 17-20)**
+- [ ] Chaos engineering tests (failure scenarios)
+- [ ] Security audit and penetration testing
+- [ ] DDOS mitigation strategies
+- [ ] Multi-region failover testing
+- [ ] Runbooks and incident response procedures
+
+### 9. Performance Targets for 1M Users
+
+| Metric | Target | Monitoring |
+|--------|--------|------------|
+| **API Response Time (p99)** | < 500ms | Prometheus + Grafana |
+| **Database Query Time (p95)** | < 100ms | DataDog / NewRelic |
+| **Workflow Completion Time** | < 30 min (typical) | Temporal Web UI |
+| **Error Rate** | < 0.1% | CloudWatch / Sentry |
+| **Cache Hit Ratio** | > 85% | Redis INFO command |
+| **Worker Availability** | > 99.9% | Temporal metrics |
+| **Search Index Latency** | < 200ms | Elasticsearch metrics |
+
+### 10. Cost Estimation (1M Active Users)
+
+```
+Monthly Infrastructure Costs (Approximate):
+
+Compute:
+  - Next.js API (30 instances): $2,000
+  - Temporal Server (6 nodes): $3,000
+  - Worker Pools (400+ instances): $15,000
+
+Database:
+  - PostgreSQL Primary (256 shards): $25,000
+  - Read Replicas (3 per shard): $30,000
+  - PgBouncer connection pooling: $1,000
+
+Cache & Queue:
+  - Redis Cluster (256GB): $5,000
+  - Temporal Persistence: $3,000
+
+Storage & Search:
+  - S3/Object Storage: $2,000
+  - Elasticsearch (high volume): $8,000
+  - CDN: $3,000
+
+Monitoring & Logging:
+  - Prometheus + Grafana: $1,000
+  - ELK Stack: $2,000
+  - Jaeger Tracing: $1,000
+  - PagerDuty / Incident Management: $1,500
+
+Total Estimated: ~$100,500/month (~$0.10 per user/month)
+```
+
+---
+
 ## Current implementation status
 
 | Area | Status | Notes |
