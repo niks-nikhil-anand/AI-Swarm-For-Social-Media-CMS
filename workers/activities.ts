@@ -4,6 +4,15 @@
 import { prisma } from "../lib/prisma";
 import { searxngSearch } from "../lib/searxng";
 import { MAX_RESULTS_PER_SEARCH, MAX_SNIPPET_LENGTH } from "../lib/constants/searxng";
+import { buildSystemPrompt, getAgentPrompt } from "../lib/constants/agentPrompts";
+import { runAgentChat } from "../lib/llm";
+
+// Free-tier models have modest context windows — cap what we feed them.
+const MAX_CONTEXT_CHARS = 14_000;
+
+function truncate(text: string, max = MAX_CONTEXT_CHARS): string {
+  return text.length <= max ? text : `${text.slice(0, max)}\n…[truncated]`;
+}
 
 export interface StoredSearchResult {
   id: string;
@@ -57,13 +66,93 @@ export async function performSearch(input: {
     await prisma.timelineEvent.create({
       data: { projectId, projectAgentId: agentId, type: "Search", text: query },
     });
-    await prisma.projectAgent.updateMany({
-      where: { id: agentId, projectId },
-      data: { status: "Done", progress: 100, completedAt: new Date() },
-    });
+    // Status stays Working — the agent's runAgent turn completes it.
   }
 
   return rows;
+}
+
+export interface RunAgentInput {
+  projectId: string;
+  /** ProjectAgent.id — DB row for status + timeline updates. */
+  agentDbId: string;
+  /** Roster slug — selects the system prompt (lead/web/data/fact/writer/designer/synth). */
+  slug: string;
+  /** The concrete task this agent must perform now. */
+  task: string;
+  /** Upstream agents' outputs / evidence digest. */
+  context: string;
+}
+
+export interface RunAgentOutput {
+  slug: string;
+  model: string;
+  output: Record<string, unknown>;
+}
+
+// One agent turn: enforce the agent's production system prompt, run the LLM,
+// record status transitions, usage, and a timeline audit trail.
+export async function runAgent(input: RunAgentInput): Promise<RunAgentOutput> {
+  const { projectId, agentDbId, slug, task, context } = input;
+  const spec = getAgentPrompt(slug);
+
+  await prisma.projectAgent.updateMany({
+    where: { id: agentDbId, projectId },
+    data: { status: "Working", progress: 10, startedAt: new Date() },
+  });
+  await prisma.timelineEvent.create({
+    data: { projectId, projectAgentId: agentDbId, type: "Thought", text: task.slice(0, 500) },
+  });
+
+  try {
+    const result = await runAgentChat(
+      buildSystemPrompt(slug),
+      `TASK\n${task}\n\nCONTEXT\n${truncate(context)}`
+    );
+
+    const digest =
+      (result.output.summary as string | undefined) ||
+      (result.output.executiveSummary as string | undefined) ||
+      (result.output.narrativeArc as string | undefined) ||
+      `${spec.title} finished its task.`;
+
+    await prisma.$transaction([
+      prisma.projectAgent.updateMany({
+        where: { id: agentDbId, projectId },
+        data: { status: "Done", progress: 100, completedAt: new Date() },
+      }),
+      prisma.timelineEvent.create({
+        data: {
+          projectId,
+          projectAgentId: agentDbId,
+          type: "Note",
+          topic: spec.title,
+          text: String(digest).slice(0, 800),
+        },
+      }),
+      prisma.project.update({
+        where: { id: projectId },
+        data: {
+          tokensIn: { increment: result.usage.promptTokens },
+          tokensOut: { increment: result.usage.completionTokens },
+        },
+      }),
+    ]);
+
+    return { slug, model: result.model, output: result.output };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await prisma.$transaction([
+      prisma.projectAgent.updateMany({
+        where: { id: agentDbId, projectId },
+        data: { status: "Error" },
+      }),
+      prisma.timelineEvent.create({
+        data: { projectId, projectAgentId: agentDbId, type: "Error", text: message.slice(0, 500) },
+      }),
+    ]);
+    throw err;
+  }
 }
 
 export async function recordEvidence(input: {
@@ -82,12 +171,23 @@ export async function recordEvidence(input: {
 export async function markProjectComplete(input: {
   projectId: string;
   failed?: boolean;
+  summary?: string;
+  wordCount?: number;
 }): Promise<void> {
+  const project = await prisma.project.findUnique({
+    where: { id: input.projectId },
+    select: { createdAt: true },
+  });
   await prisma.project.update({
     where: { id: input.projectId },
     data: {
       status: input.failed ? "Failed" : "Complete",
       completedAt: new Date(),
+      durationSeconds: project
+        ? Math.round((Date.now() - project.createdAt.getTime()) / 1000)
+        : undefined,
+      summary: input.summary?.slice(0, 2000),
+      wordCount: input.wordCount,
     },
   });
 }
