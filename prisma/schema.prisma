@@ -162,6 +162,8 @@ model Project {
   timelineEvents  TimelineEvent[]
   slides          Slide[]
   sources         Source[]
+  searchResults   SearchResult[]
+  evidence        Evidence[]
 
   @@index([userId])
 }
@@ -172,6 +174,9 @@ model Project {
 model ProjectAgent {
   id          String         @id @default(cuid())
   projectId   String
+  // Stable roster key (e.g. "lead", "web") — deps reference these slugs,
+  // and the UI graph matches nodes by them.
+  slug        String         @default("")
   name        String
   short       String
   icon        String
@@ -188,6 +193,7 @@ model ProjectAgent {
   project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   timelineEvents TimelineEvent[] @relation("AgentTimelineEvents")
   handoffsTo     TimelineEvent[] @relation("HandoffTarget")
+  evidence       Evidence[]
 
   @@index([projectId])
 }
@@ -232,6 +238,48 @@ model Slide {
 
   @@index([projectId])
   @@unique([projectId, n])
+}
+
+// A stored SearXNG search result for a project (research evidence trail).
+model SearchResult {
+  id          String   @id @default(cuid())
+  projectId   String
+  query       String
+  rank        Int
+  title       String
+  url         String   @db.VarChar(2048)
+  snippet     String?  @db.Text
+  engine      String?
+  retrievedAt DateTime @default(now())
+
+  project  Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evidence Evidence[]
+
+  @@index([projectId])
+  @@unique([projectId, url])
+}
+
+// Extracted evidence tied back to a search result (claim + citation).
+model Evidence {
+  id             String   @id @default(cuid())
+  projectId      String
+  searchResultId String?
+  agentId        String
+  content        String   @db.Text
+  topic          String
+  sourceUrl      String
+  sourceTitle    String?
+  verified       Boolean  @default(false)
+  verifiedBy     String?
+  createdAt      DateTime @default(now())
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectAgent ProjectAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  searchResult SearchResult? @relation(fields: [searchResultId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([agentId])
+  @@index([topic])
 }
 
 // Maps to Source (Output stage citations).
