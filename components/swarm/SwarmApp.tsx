@@ -12,6 +12,9 @@ import { Run } from "./Run";
 import { Output } from "./Output";
 import { SessionDetail } from "./SessionDetail";
 import type { Stage } from "./ui";
+import type { Agent } from "./data";
+
+const PROJECT_ID_KEY = "swarm-active-project";
 
 const STAGES: Stage[] = [
   { key: "define", label: "Define" },
@@ -89,6 +92,7 @@ export default function SwarmApp() {
   const [runLayout, setRunLayout] = useState<"split" | "graph" | "logs">("split");
   const [graphLayout, setGraphLayout] = useState<"layered" | "vertical" | "radial">("layered");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
 
   // apply tweaks to document
   useEffect(() => {
@@ -105,13 +109,82 @@ export default function SwarmApp() {
     setTimeout(() => setToasts((p) => p.filter((x) => x.id !== id)), 4200);
   }, []);
 
+  // Resume an in-flight run after a refresh: prefer the sessionStorage marker,
+  // fall back to the newest Running project in the DB.
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      let stored: string | null = null;
+      try { stored = sessionStorage.getItem(PROJECT_ID_KEY); } catch { /* ignore */ }
+
+      try {
+        const res = await fetch("/api/projects");
+        if (!res.ok || cancelled) return;
+        const projects: { id: string; status: string; agentsCount: number }[] = await res.json();
+        const active =
+          (stored && projects.find((p) => p.id === stored && (p.status === "Running" || p.status === "Draft"))) ||
+          projects.find((p) => p.status === "Running");
+        if (!active || cancelled) return;
+
+        setProjectId(active.id);
+        try { sessionStorage.setItem(PROJECT_ID_KEY, active.id); } catch { /* ignore */ }
+        setReached((p) => Array.from(new Set([...p, "roles", "run", "output"])));
+        setScreen("run");
+        setFlowScreen("run");
+        pushToast({ icon: "activity", title: "Run resumed", body: "Reconnected to your project in progress." });
+      } catch { /* offline — stay on Define */ }
+    }
+    hydrate();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function reach(...keys: string[]) { setReached((p) => Array.from(new Set([...p, ...keys]))); }
   const FLOW = ["define", "roles", "run", "output"];
   function go(key: string) { setScreen(key); if (FLOW.includes(key)) setFlowScreen(key); }
 
   function onPropose() { reach("roles"); go("roles"); pushToast({ icon: "wand", title: "Team proposed", body: "7 specialist agents are ready for your approval." }); }
-  function onLaunch() { reach("run", "output"); go("run"); pushToast({ icon: "play", title: "Swarm launched", body: "7 agents are now researching live." }); }
-  function onComplete() { reach("output"); go("output"); pushToast({ icon: "check-circle-fill", tone: "success", title: "Deck ready", body: "quantum-cryptography-impact.pptx · 10 slides." }); }
+  function onLaunch(roster: Agent[]) {
+    reach("run", "output"); go("run");
+    pushToast({ icon: "play", title: "Swarm launched", body: `${roster.length} agents are now researching live.` });
+    // Persist the project + frozen team so live search, workflow runs and
+    // refreshes have somewhere real to read/write.
+    if (!projectId) {
+      fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: PROJECT_TITLE,
+          goal: PROJECT_TITLE,
+          format: "deck",
+          agents: roster.map((a) => ({
+            id: a.id, name: a.name, short: a.short, icon: a.icon, accent: a.accent,
+            role: a.role, why: a.why, deps: a.deps, layer: a.layer,
+          })),
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.id) {
+            setProjectId(data.id);
+            try { sessionStorage.setItem(PROJECT_ID_KEY, data.id); } catch { /* ignore */ }
+          }
+        })
+        .catch(() => { /* unauthenticated or offline — search stays disabled */ });
+    }
+  }
+  function onComplete() {
+    reach("output"); go("output");
+    pushToast({ icon: "check-circle-fill", tone: "success", title: "Deck ready", body: "quantum-cryptography-impact.pptx · 10 slides." });
+    if (projectId) {
+      fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Complete" }),
+      }).catch(() => { /* offline — status stays Running until next sync */ });
+      try { sessionStorage.removeItem(PROJECT_ID_KEY); } catch { /* ignore */ }
+    }
+  }
   function onRerun() { go("roles"); pushToast({ icon: "reload", title: "Cloned to Roles", body: "Adjust the team and launch again." }); }
   function onNew() { setReached(["define", "history"]); go("define"); }
   function openLive() { reach("run", "output"); setScreen("run"); setFlowScreen("run"); }
@@ -150,7 +223,7 @@ export default function SwarmApp() {
         <div data-screen-label={`Swarm · ${screen}`} style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {screen === "define" && <Define onPropose={onPropose} />}
           {screen === "roles" && <Roles onLaunch={onLaunch} />}
-          {screen === "run" && <Run onComplete={onComplete} runLayout={runLayout} setRunLayout={setRunLayout} graphLayout={graphLayout} setGraphLayout={setGraphLayout} motion={t.motion} />}
+          {screen === "run" && <Run onComplete={onComplete} runLayout={runLayout} setRunLayout={setRunLayout} graphLayout={graphLayout} setGraphLayout={setGraphLayout} motion={t.motion} projectId={projectId} />}
           {screen === "output" && <Output onRerun={onRerun} />}
           {screen === "session" && <SessionDetail id={activeSession} onBack={() => router.push("/projects")} onOpenLive={openLive} onRerun={onRerun} />}
         </div>
