@@ -58,6 +58,18 @@ export interface WorkspaceGroup {
   notes: string[];
 }
 
+// A persisted SearXNG result returned by /api/search and /api/search/results.
+export interface SearchResult {
+  id: string;
+  query?: string;
+  title: string;
+  url: string;
+  snippet?: string | null;
+  rank: number;
+  engine?: string | null;
+  retrievedAt?: string;
+}
+
 export interface Source {
   host: string;
   title: string;
