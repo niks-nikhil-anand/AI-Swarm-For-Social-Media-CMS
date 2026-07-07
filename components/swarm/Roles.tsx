@@ -134,7 +134,7 @@ function AddRoleModal({ onClose, onAdd }: { onClose: () => void; onAdd: (r: { na
   );
 }
 
-export function Roles({ onLaunch }: { onLaunch: () => void }) {
+export function Roles({ onLaunch }: { onLaunch: (roster: Agent[]) => void }) {
   const [agents, setAgents] = useState<Agent[]>(AGENTS);
   const [approved, setApproved] = useState<string[]>(() => AGENTS.map((a) => a.id));
   const [modal, setModal] = useState(false);
@@ -193,7 +193,7 @@ export function Roles({ onLaunch }: { onLaunch: () => void }) {
               </div>
             </div>
             <div style={{ flex: 1 }} />
-            <Btn kind="primary" size="lg" icon="play" iconRight="arrow-right" disabled={count < 2} onClick={onLaunch}>Launch swarm</Btn>
+            <Btn kind="primary" size="lg" icon="play" iconRight="arrow-right" disabled={count < 2} onClick={() => onLaunch(agents.filter((a) => approved.includes(a.id)))}>Launch swarm</Btn>
           </div>
         </div>
       </div>
