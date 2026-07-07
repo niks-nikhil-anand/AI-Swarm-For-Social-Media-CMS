@@ -1,0 +1,59 @@
+# Local infrastructure for Swarm: PostgreSQL, SearXNG, Temporal + UI.
+# App DB defaults to the DATABASE_URL in .env (e.g. Neon); the postgres
+# service here backs Temporal and can also serve as a local app DB.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: swarm
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8888:8080"
+    environment:
+      SEARXNG_BASE_URL: http://localhost:8888/
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: ${DB_PASSWORD:-postgres}
+      POSTGRES_SEEDS: postgres
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - temporal
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
