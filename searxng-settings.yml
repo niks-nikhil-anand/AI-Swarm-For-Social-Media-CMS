@@ -1,0 +1,15 @@
+# Minimal SearXNG settings for the Swarm dev instance.
+# `use_default_settings: true` inherits everything else from the image defaults.
+
+use_default_settings: true
+
+server:
+  secret_key: "swarm-dev-secret-change-in-production"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json # required — Swarm consumes /search?format=json
