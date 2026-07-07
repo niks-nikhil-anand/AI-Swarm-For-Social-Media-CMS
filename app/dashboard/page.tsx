@@ -8,6 +8,8 @@ import { Icon, Btn, Card, Bar, StatusDot, Segmented } from "../../components/swa
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
 import { FORMATS, type ProjectStatus } from "../../components/swarm/data";
 
+/* ---- Dashboard for free architecture: focus on usage metrics, not costs ---- */
+
 interface Usage {
   monthSpend: number; monthBudget: number; lastMonth: number;
   totals: { tokens: number; tokensIn: number; tokensOut: number; searches: number; projects: number; requests: number };
@@ -129,6 +131,8 @@ export default function DashboardPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [rows, setRows] = useState<SpendRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modelBreakdown, setModelBreakdown] = useState<any>(null);
+  const [agentBreakdown, setAgentBreakdown] = useState<any>(null);
   const HSTATUS: Record<string, [string, string]> = { running: ["Running", "working"], complete: ["Complete", "done"], failed: ["Failed", "error"] };
   const backHome = () => router.push("/");
   const billingPeriod = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -137,12 +141,16 @@ export default function DashboardPage() {
     Promise.all([
       fetch("/api/usage").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/projects").then((r) => (r.ok ? r.json() : [])),
+      fetch("/api/analytics/models").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/analytics/agents").then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([u, projectRows]: [Usage | null, ApiProject[]]) => {
+      .then(([u, projectRows, models, agents]: [Usage | null, ApiProject[], any, any]) => {
         setUsage(u);
         setRows(projectRows.map(toSpendRow));
+        setModelBreakdown(models);
+        setAgentBreakdown(agents);
       })
-      .catch(() => { setUsage(null); setRows([]); })
+      .catch(() => { setUsage(null); setRows([]); setModelBreakdown(null); setAgentBreakdown(null); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -152,7 +160,7 @@ export default function DashboardPage() {
         <Sidebar view="dashboard" activeSession={null}
           onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
         <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-          <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & cost" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
+          <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & Analytics" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
           <div style={{ padding: "32px 24px" }}>
             <Card style={{ padding: 40, textAlign: "center" }}>
               <p className="muted" style={{ fontSize: 13.5 }}>Loading usage…</p>
@@ -171,13 +179,13 @@ export default function DashboardPage() {
       <Sidebar view="dashboard" activeSession={null}
         onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-        <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & cost" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
+        <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & Analytics" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
         <div style={{ overflow: "auto", height: "100%", padding: "32px 24px 48px" }}>
           <div style={{ maxWidth: 1180, margin: "0 auto" }}>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 16, flexWrap: "wrap" }}>
               <div>
-                <h1 className="h1">Usage &amp; cost</h1>
-                <p className="muted" style={{ fontSize: 14.5, marginTop: 4 }}>API spend, tokens and search across all swarms · billing period {billingPeriod}</p>
+                <h1 className="h1">Usage &amp; Analytics</h1>
+                <p className="muted" style={{ fontSize: 14.5, marginTop: 4 }}>API tokens, searches, and request metrics across all projects</p>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <Segmented<string> size="sm" options={[{ value: "7d", label: "7d" }, { value: "30d", label: "30d" }, { value: "90d", label: "90d" }]} value={period} onChange={setPeriod} />
@@ -186,15 +194,6 @@ export default function DashboardPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 16 }}>
-              <Kpi label="Spend this month" value={money(u.monthSpend)} delta={u.deltas.spend}>
-                <div style={{ marginTop: 12 }}>
-                  <Bar value={(u.monthSpend / u.monthBudget) * 100} color="var(--accent)" height={5} glow />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    <span className="faint" style={{ fontSize: 11 }}>of {money(u.monthBudget)} budget</span>
-                    <span className="mono" style={{ fontSize: 11, color: "var(--st-done)" }}>{money(remaining)} left</span>
-                  </div>
-                </div>
-              </Kpi>
               <Kpi label="Tokens used" value={u.totals.tokens.toFixed(1)} unit="M" delta={u.deltas.tokens}>
                 <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>≈ {u.totals.tokensIn.toFixed(1)}M in · {u.totals.tokensOut.toFixed(1)}M out</div>
               </Kpi>
@@ -202,23 +201,26 @@ export default function DashboardPage() {
                 <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>across {u.totals.projects} project{u.totals.projects === 1 ? "" : "s"}</div>
               </Kpi>
               <Kpi label="API requests" value={u.totals.requests.toLocaleString()} delta={u.deltas.projects}>
-                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>avg {u.totals.projects > 0 ? money(u.monthSpend / u.totals.projects) : "$0.00"} / project</div>
+                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>this month</div>
+              </Kpi>
+              <Kpi label="Active projects" value={u.totals.projects} delta={u.deltas.projects}>
+                <div className="faint" style={{ fontSize: 11.5, marginTop: 12 }}>in this billing period</div>
               </Kpi>
             </div>
 
             <Card style={{ padding: 20, marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                 <div>
-                  <span className="eyebrow">Daily spend · last 30 days</span>
+                  <span className="eyebrow">Daily projects · last 30 days</span>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-                    <span className="tabular" style={{ fontSize: 22, fontWeight: 700 }}>{money(u.spendSeries.reduce((a, b) => a + b, 0))}</span>
+                    <span className="tabular" style={{ fontSize: 22, fontWeight: 700 }}>{u.spendSeries.reduce((a, b) => a + b, 0).toFixed(0)}</span>
                     <Delta v={u.deltas.spend} />
                     <span className="faint" style={{ fontSize: 12 }}>vs previous period</span>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 11.5 }}>
-                  <span className="faint">Peak <b className="mono" style={{ color: "var(--text-2)" }}>{money(Math.max(...u.spendSeries))}</b></span>
-                  <span className="faint">Avg/day <b className="mono" style={{ color: "var(--text-2)" }}>{money(u.spendSeries.reduce((a, b) => a + b, 0) / u.spendSeries.length)}</b></span>
+                  <span className="faint">Peak <b className="mono" style={{ color: "var(--text-2)" }}>{Math.max(...u.spendSeries).toFixed(0)}</b></span>
+                  <span className="faint">Avg/day <b className="mono" style={{ color: "var(--text-2)" }}>{(u.spendSeries.reduce((a, b) => a + b, 0) / u.spendSeries.length).toFixed(1)}</b></span>
                 </div>
               </div>
               <SpendArea data={u.spendSeries} />
@@ -227,15 +229,37 @@ export default function DashboardPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16, marginBottom: 16 }}>
               <Card style={{ padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                  <span className="h4">Cost by model &amp; service</span>
+                  <span className="h4">Usage by format</span>
                 </div>
-                <p className="muted" style={{ fontSize: 13 }}>No spend recorded yet — a per-model cost breakdown will appear once agents run.</p>
+                {modelBreakdown?.breakdown && modelBreakdown.breakdown.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {modelBreakdown.breakdown.slice(0, 5).map((item: any) => (
+                      <div key={item.model} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span className="faint" style={{ fontSize: 12 }}>{item.model}</span>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{(item.tokens / 1e6).toFixed(2)}M</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted" style={{ fontSize: 13 }}>No data yet — run projects to see usage breakdown.</p>
+                )}
               </Card>
               <Card style={{ padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                  <span className="h4">Cost by agent role</span>
+                  <span className="h4">Agent roles</span>
                 </div>
-                <p className="muted" style={{ fontSize: 13 }}>No spend recorded yet — a per-agent cost breakdown will appear once agents run.</p>
+                {agentBreakdown?.breakdown && agentBreakdown.breakdown.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {agentBreakdown.breakdown.slice(0, 5).map((item: any) => (
+                      <div key={item.role} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span className="faint" style={{ fontSize: 12 }}>{item.role}</span>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted" style={{ fontSize: 13 }}>No data yet — run projects to see agent breakdown.</p>
+                )}
               </Card>
             </div>
 
