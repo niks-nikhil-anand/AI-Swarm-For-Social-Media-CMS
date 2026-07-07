@@ -5,6 +5,8 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Icon, Btn, IconBtn, Badge, Ring, Bar, StatusPill, StatusDot, Segmented, STATUS } from "./ui";
 import { AgentGraph } from "./Graph";
+import { SearchPanel } from "./SearchPanel";
+import { TemporalMonitor } from "./TemporalMonitor";
 import { AGENTS, TIMELINE, WORKSPACE, type Agent, type AgentStatus, type TimelineEvent } from "./data";
 
 type RunLayout = "split" | "graph" | "logs";
@@ -41,6 +43,26 @@ function fmtElapsed(clock: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/* ---- live mode: DB state mapped onto the UI shapes ---- */
+const DB_STATUS: Record<string, AgentStatus> = {
+  Idle: "idle", Working: "working", Blocked: "blocked", Waiting: "waiting", Done: "done", Error: "error",
+};
+const LIVE_ACTION: Record<AgentStatus, string> = {
+  idle: "Queued", waiting: "Waiting for upstream findings", working: "Working…",
+  blocked: "Blocked — needs attention", done: "Completed", error: "Errored",
+};
+
+interface LiveState {
+  project: { id: string; title: string; status: string; searches: number; cost: number; createdAt: string; completedAt: string | null };
+  agents: {
+    id: string; slug: string; name: string; short: string; icon: string; accent: string;
+    role: string; why: string; deps: string[]; layer: number; status: string; progress: number;
+  }[];
+  timeline: { id: string; agentSlug: string; type: string; text: string; url: string | null; topic: string | null; createdAt: string }[];
+}
+
+type LiveTimelineEvent = TimelineEvent & { tLabel?: string };
+
 /* ---- log line ---- */
 const LOG_META: Record<string, { icon: string; color: string; label: string }> = {
   thought: { icon: "discussion-circle", color: "var(--muted)", label: "thought" },
@@ -52,9 +74,9 @@ const LOG_META: Record<string, { icon: string; color: string; label: string }> =
   warn:    { icon: "alert-triangle", color: "var(--st-blocked)", label: "flag" },
   error:   { icon: "alert-circle", color: "var(--st-error)", label: "error" },
 };
-function LogLine({ ev }: { ev: TimelineEvent }) {
+function LogLine({ ev, agents = AGENTS }: { ev: LiveTimelineEvent; agents?: Agent[] }) {
   const m = LOG_META[ev.type] || LOG_META.system;
-  const agent = AGENTS.find((a) => a.id === ev.agent);
+  const agent = agents.find((a) => a.id === ev.agent);
   return (
     <div className="rise" style={{ display: "flex", gap: 10, padding: "9px 14px", borderBottom: "1px solid var(--border-soft)" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 1 }}>
@@ -66,7 +88,7 @@ function LogLine({ ev }: { ev: TimelineEvent }) {
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
           <span style={{ fontSize: 11.5, fontWeight: 600, color: agent ? agent.accent : "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{agent ? agent.name : "System"}</span>
           <span className="mono" style={{ fontSize: 10, color: "var(--faint)", flexShrink: 0 }}>{m.label}</span>
-          <span className="mono" style={{ fontSize: 10, color: "var(--faint)", marginLeft: "auto", flexShrink: 0 }}>{fmtElapsed(ev.t)}</span>
+          <span className="mono" style={{ fontSize: 10, color: "var(--faint)", marginLeft: "auto", flexShrink: 0 }}>{ev.tLabel ?? fmtElapsed(ev.t)}</span>
         </div>
         {ev.type === "search" ? (
           <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 9px", borderRadius: "var(--r-sm)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
@@ -146,9 +168,10 @@ function SlideOver({ open, onClose, title, icon, children, width = 460 }: {
 }
 
 /* ---- main ---- */
-export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraphLayout }: {
+export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraphLayout, projectId }: {
   onComplete: () => void; runLayout: RunLayout; setRunLayout: (v: RunLayout) => void;
   graphLayout: GraphLayout; setGraphLayout: (v: GraphLayout) => void; motion?: number;
+  projectId?: string | null;
 }) {
   const [clock, setClock] = useState(2);
   const [playing, setPlaying] = useState(true);
@@ -158,8 +181,39 @@ export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraph
   const [atBottom, setAtBottom] = useState(true);
   const logRef = useRef<HTMLDivElement>(null);
 
+  // Live mode: with a persisted project, render from the DB instead of the
+  // demo simulation, so a refresh shows the run's real state.
+  const isLive = !!projectId;
+  const [live, setLive] = useState<LiveState | null>(null);
+  const [pollFailed, setPollFailed] = useState(false);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
   useEffect(() => {
-    if (!playing) return;
+    if (!projectId) return;
+    let stopped = false;
+    async function poll() {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/state`);
+        if (!res.ok) throw new Error(String(res.status));
+        const data: LiveState = await res.json();
+        if (!stopped) { setLive(data); setPollFailed(false); }
+      } catch {
+        if (!stopped) setPollFailed(true);
+      }
+    }
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!isLive || live?.project.status !== "Running") return;
+    const id = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isLive, live?.project.status]);
+
+  useEffect(() => {
+    if (isLive || !playing) return;
     const id = setInterval(() => {
       setClock((c) => {
         if (c >= 100) { clearInterval(id); return 100; }
@@ -167,22 +221,57 @@ export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraph
       });
     }, 60);
     return () => clearInterval(id);
-  }, [playing, speed]);
+  }, [playing, speed, isLive]);
 
-  const done = clock >= 100;
+  const liveAgents: Agent[] = (live?.agents ?? []).map((a) => ({
+    id: a.slug || a.id, name: a.name, short: a.short, icon: a.icon, accent: a.accent,
+    role: a.role, why: a.why, deps: a.deps, layer: a.layer,
+  }));
+  const agents = isLive ? liveAgents : AGENTS;
+  const projectStatus = live?.project.status ?? "Draft";
+  const done = isLive ? projectStatus === "Complete" : clock >= 100;
 
   const statuses: Record<string, AgentStatus> = {}; const progress: Record<string, number> = {}; const actions: Record<string, string> = {};
-  AGENTS.forEach((a) => { statuses[a.id] = statusFor(a, clock); progress[a.id] = progressFor(a, clock); actions[a.id] = actionFor(a, clock); });
+  if (isLive) {
+    (live?.agents ?? []).forEach((a) => {
+      const key = a.slug || a.id;
+      const st = DB_STATUS[a.status] || "idle";
+      statuses[key] = st; progress[key] = Math.round(a.progress); actions[key] = LIVE_ACTION[st];
+    });
+  } else {
+    AGENTS.forEach((a) => { statuses[a.id] = statusFor(a, clock); progress[a.id] = progressFor(a, clock); actions[a.id] = actionFor(a, clock); });
+  }
 
   const flows: { from: string; to: string }[] = [];
-  AGENTS.forEach((a) => a.deps.forEach((d) => {
+  agents.forEach((a) => a.deps.forEach((d) => {
     if (statuses[a.id] === "working" && (statuses[d] === "done" || statuses[d] === "working")) flows.push({ from: d, to: a.id });
   }));
 
-  const visible = TIMELINE.filter((e) => e.t <= clock);
-  const overall = Math.round(AGENTS.reduce((s, a) => s + progressFor(a, clock), 0) / AGENTS.length);
-  const reconnecting = clock >= 44 && clock < 47.5;
-  const escalating = clock >= 65 && clock < 72;
+  const visible: LiveTimelineEvent[] = isLive
+    ? (live?.timeline ?? []).map((e) => ({
+        t: 0,
+        tLabel: new Date(e.createdAt).toLocaleTimeString([], { hour12: false }),
+        agent: e.agentSlug,
+        type: e.type.toLowerCase() as TimelineEvent["type"],
+        text: e.text,
+        url: e.url ?? undefined,
+        topic: e.topic ?? undefined,
+      }))
+    : TIMELINE.filter((e) => e.t <= clock);
+  const overall = agents.length
+    ? Math.round(agents.reduce((s, a) => s + (progress[a.id] ?? 0), 0) / agents.length)
+    : 0;
+  const reconnecting = isLive ? pollFailed : (clock >= 44 && clock < 47.5);
+  const escalating = !isLive && clock >= 65 && clock < 72;
+
+  const elapsedLabel = (() => {
+    if (!isLive) return fmtElapsed(clock);
+    if (!live) return "0:00";
+    const start = new Date(live.project.createdAt).getTime();
+    const end = live.project.completedAt ? new Date(live.project.completedAt).getTime() : nowTs;
+    const s = Math.max(0, Math.round((end - start) / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  })();
 
   useEffect(() => {
     const el = logRef.current; if (!el || !atBottom) return;
@@ -196,31 +285,44 @@ export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraph
   const graphFlex = runLayout === "graph" ? 1 : runLayout === "logs" ? 0 : 1.45;
   const showGraph = runLayout !== "logs";
   const showLogCol = runLayout !== "graph";
-  const selAgent = AGENTS.find((a) => a.id === selected);
+  const selAgent = agents.find((a) => a.id === selected);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {!done ? (
-            <Btn kind={playing ? "secondary" : "primary"} icon={playing ? "pause" : "play"} onClick={() => setPlaying(!playing)}>{playing ? "Pause" : "Resume"}</Btn>
-          ) : (
+          {done ? (
             <Btn kind="primary" icon="arrow-right" iconRight="arrow-right" onClick={onComplete}>View output</Btn>
+          ) : isLive ? (
+            <Btn kind="primary" icon="check" onClick={onComplete}>Mark complete</Btn>
+          ) : (
+            <Btn kind={playing ? "secondary" : "primary"} icon={playing ? "pause" : "play"} onClick={() => setPlaying(!playing)}>{playing ? "Pause" : "Resume"}</Btn>
           )}
-          {!done && <Btn kind="danger" icon="x">Cancel</Btn>}
-          {!done && <Segmented<number> size="sm" options={[{ value: 1, label: "1×" }, { value: 2, label: "2×" }, { value: 4, label: "4×" }]} value={speed} onChange={setSpeed} />}
+          {!done && !isLive && <Btn kind="danger" icon="x">Cancel</Btn>}
+          {!done && !isLive && <Segmented<number> size="sm" options={[{ value: 1, label: "1×" }, { value: 2, label: "2×" }, { value: 4, label: "4×" }]} value={speed} onChange={setSpeed} />}
         </div>
 
         <div style={{ flex: 1 }} />
 
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 28, padding: "0 11px", borderRadius: "var(--r-pill)", fontSize: 12, fontWeight: 600, background: reconnecting ? "var(--st-blocked-soft)" : "var(--st-done-soft)", color: reconnecting ? "var(--st-blocked)" : "var(--st-done)", border: `1px solid color-mix(in oklab, ${reconnecting ? "var(--st-blocked)" : "var(--st-done)"} 30%, transparent)` }}>
-          {reconnecting ? <><span style={{ width: 12, height: 12, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: 999, animation: "swarm-spin 0.7s linear infinite" }} /> Reconnecting…</> : <><StatusDot status="done" size={7} /> Live</>}
-        </span>
-        <span className="mono" style={{ fontSize: 12.5, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="clock" size={13} color="var(--faint)" />{fmtElapsed(clock)}</span>
+        {(() => {
+          const idleLive = isLive && !reconnecting && projectStatus !== "Running";
+          const tone = reconnecting ? "var(--st-blocked)" : idleLive ? "var(--muted)" : "var(--st-done)";
+          const toneSoft = reconnecting ? "var(--st-blocked-soft)" : idleLive ? "var(--elevated-2)" : "var(--st-done-soft)";
+          return (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 28, padding: "0 11px", borderRadius: "var(--r-pill)", fontSize: 12, fontWeight: 600, background: toneSoft, color: tone, border: `1px solid color-mix(in oklab, ${tone} 30%, transparent)` }}>
+              {reconnecting
+                ? <><span style={{ width: 12, height: 12, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: 999, animation: "swarm-spin 0.7s linear infinite" }} /> Reconnecting…</>
+                : idleLive
+                  ? <><StatusDot status={projectStatus === "Complete" ? "done" : "idle"} size={7} /> {projectStatus}</>
+                  : <><StatusDot status="done" size={7} /> Live</>}
+            </span>
+          );
+        })()}
+        <span className="mono" style={{ fontSize: 12.5, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="clock" size={13} color="var(--faint)" />{elapsedLabel}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Ring value={overall} size={34} stroke={3.5}><span style={{ fontSize: 9.5 }}>{overall}%</span></Ring>
         </div>
-        <Btn kind="secondary" icon="folder" onClick={() => setShowWorkspace(true)}>Workspace</Btn>
+        {!isLive && <Btn kind="secondary" icon="folder" onClick={() => setShowWorkspace(true)}>Workspace</Btn>}
         <Segmented<RunLayout> size="sm" options={[{ value: "split", label: "Split" }, { value: "graph", label: "Graph" }, { value: "logs", label: "Logs" }]} value={runLayout} onChange={setRunLayout} />
       </div>
 
@@ -236,18 +338,18 @@ export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraph
           <div style={{ flex: graphFlex, minWidth: 0, display: "flex", flexDirection: "column", borderRight: showLogCol ? "1px solid var(--border)" : "none" }}>
             <div style={{ flex: 1, position: "relative", minHeight: 0, background: "var(--bg-2)" }}>
               <div style={{ position: "absolute", top: 12, left: 14, zIndex: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                <Badge tone="cyan" icon="activity">{AGENTS.filter((a) => statuses[a.id] === "working").length} active</Badge>
+                <Badge tone="cyan" icon="activity">{agents.filter((a) => statuses[a.id] === "working").length} active</Badge>
                 <Segmented<GraphLayout> size="sm" options={[{ value: "layered", label: "Layered" }, { value: "vertical", label: "Vertical" }, { value: "radial", label: "Radial" }]} value={graphLayout} onChange={setGraphLayout} />
               </div>
-              <AgentGraph agents={AGENTS} statuses={statuses} progress={progress} layout={graphLayout} flows={flows} selected={selected} onSelect={(a) => setSelected(a.id)} />
+              <AgentGraph agents={agents} statuses={statuses} progress={progress} layout={graphLayout} flows={flows} selected={selected} onSelect={(a) => setSelected(a.id)} />
             </div>
             <div style={{ flexShrink: 0, borderTop: "1px solid var(--border)", padding: "12px 14px", background: "var(--surface)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <span className="eyebrow">Agents · {AGENTS.length}</span>
-                <span className="faint" style={{ fontSize: 11 }}>{AGENTS.filter((a) => statuses[a.id] === "done").length} done · {AGENTS.filter((a) => statuses[a.id] === "working").length} working</span>
+                <span className="eyebrow">Agents · {agents.length}</span>
+                <span className="faint" style={{ fontSize: 11 }}>{agents.filter((a) => statuses[a.id] === "done").length} done · {agents.filter((a) => statuses[a.id] === "working").length} working</span>
               </div>
               <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-                {AGENTS.map((a) => <AgentProgressCard key={a.id} agent={a} status={statuses[a.id]} progress={progress[a.id]} action={actions[a.id]} selected={selected === a.id} onClick={() => setSelected(a.id)} />)}
+                {agents.map((a) => <AgentProgressCard key={a.id} agent={a} status={statuses[a.id]} progress={progress[a.id]} action={actions[a.id]} selected={selected === a.id} onClick={() => setSelected(a.id)} />)}
               </div>
             </div>
           </div>
@@ -260,12 +362,16 @@ export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraph
               <span className="h4">Activity</span>
               <Badge tone="neutral">{visible.length}</Badge>
               <div style={{ flex: 1 }} />
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--st-working)" }}><StatusDot status="working" size={6} /> streaming</span>
+              {(!isLive || projectStatus === "Running") && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--st-working)" }}><StatusDot status="working" size={6} /> streaming</span>
+              )}
             </div>
+            {projectId && <TemporalMonitor projectId={projectId} />}
+            {projectId && <SearchPanel projectId={projectId} agentId={live?.agents[0]?.id} />}
             <div ref={logRef} onScroll={onLogScroll} role="log" aria-live="polite" style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0 }}>
               {visible.length === 0 ? (
                 <div style={{ padding: 40, textAlign: "center", color: "var(--faint)", fontSize: 13 }}>Awaiting first signal…</div>
-              ) : visible.map((ev, i) => <LogLine key={i} ev={ev} />)}
+              ) : visible.map((ev, i) => <LogLine key={i} ev={ev} agents={agents} />)}
             </div>
             {!atBottom && (
               <button onClick={() => { setAtBottom(true); const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }}
@@ -294,7 +400,7 @@ export function Run({ onComplete, runLayout, setRunLayout, graphLayout, setGraph
             </div>
             <div className="eyebrow" style={{ marginBottom: 8 }}>Activity from this agent</div>
             <div style={{ borderRadius: "var(--r-md)", border: "1px solid var(--border)", overflow: "hidden" }}>
-              {visible.filter((e) => e.agent === selAgent.id).slice(-8).reverse().map((ev, i) => <LogLine key={i} ev={ev} />)}
+              {visible.filter((e) => e.agent === selAgent.id).slice(-8).reverse().map((ev, i) => <LogLine key={i} ev={ev} agents={agents} />)}
               {visible.filter((e) => e.agent === selAgent.id).length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--faint)", fontSize: 12.5 }}>No activity yet.</div>}
             </div>
           </div>

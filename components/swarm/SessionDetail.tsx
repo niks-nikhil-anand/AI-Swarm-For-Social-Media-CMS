@@ -2,10 +2,53 @@
 /* ============================================================
    SWARM — Session detail (open a project, see its output)
    ============================================================ */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Icon, Btn, IconBtn, Badge, Card, Ring, StatusDot } from "./ui";
 import { Slide } from "./Output";
 import { SLIDES, SOURCES, HISTORY, type Project } from "./data";
+
+const FMT_LABELS: Record<string, [string, string]> = {
+  deck: ["PowerPoint", "layers"], pdf: ["PDF Report", "file-text"], docx: ["DOCX", "file-text"],
+  blog: ["Blog Post", "edit"], markdown: ["Markdown", "file-text"], summary: ["Exec Summary", "file-source"],
+};
+const DB_TO_UI_STATUS: Record<string, Project["status"]> = {
+  Draft: "running", Running: "running", Complete: "complete", Failed: "failed",
+};
+
+function fmtDuration(seconds: number | null): string {
+  if (!seconds) return "—";
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+// Map a real /api/projects/[id] payload onto the UI Project shape.
+function mapDbProject(p: {
+  id: string; title: string; goal: string; format: string; status: string;
+  cost: number; tokensIn: number; tokensOut: number; searches: number;
+  durationSeconds: number | null; wordCount: number | null; summary: string | null;
+  createdAt: string; agents: unknown[]; sources: { host: string; title: string; by: string; verified: boolean }[];
+}): Project {
+  const [fmt, fmtIcon] = FMT_LABELS[p.format] ?? [p.format, "file-text"];
+  return {
+    id: p.id,
+    title: p.title,
+    fmt,
+    fmtIcon,
+    status: DB_TO_UI_STATUS[p.status] ?? "running",
+    date: new Date(p.createdAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }),
+    agents: p.agents.length,
+    accent: "var(--blue)",
+    cost: p.cost,
+    tokIn: p.tokensIn,
+    tokOut: p.tokensOut,
+    searches: p.searches,
+    duration: fmtDuration(p.durationSeconds),
+    words: p.wordCount ?? 0,
+    sourcesN: p.sources.length,
+    kind: p.format === "deck" ? "pptx" : "doc",
+    summary: p.summary ?? "No summary generated yet.",
+    goal: p.goal,
+  };
+}
 
 function money(n: number) { return "$" + n.toFixed(2); }
 const SS: Record<string, [string, string]> = { running: ["running", "Running"], complete: ["done", "Complete"], failed: ["error", "Failed"] };
@@ -71,7 +114,38 @@ function MetaRow({ k, v, mono }: { k: string; v: React.ReactNode; mono?: boolean
 export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
   id: string | null; onBack: () => void; onOpenLive: () => void; onRerun: () => void;
 }) {
-  const s = HISTORY.find((x) => x.id === id) || HISTORY[0];
+  const mock = HISTORY.find((x) => x.id === id) ?? null;
+  const [fetched, setFetched] = useState<Project | null>(null);
+  const [notFound, setNotFound] = useState(false);
+
+  // Real project ids come from the DB — fetch them instead of showing a mock.
+  useEffect(() => {
+    if (!id || mock) return;
+    let cancelled = false;
+    fetch(`/api/projects/${id}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("not found"))))
+      .then((data) => { if (!cancelled) setFetched(mapDbProject(data)); })
+      .catch(() => { if (!cancelled) setNotFound(true); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const s = mock ?? fetched;
+  if (!s) {
+    return (
+      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {notFound ? (
+          <Card style={{ maxWidth: 400, textAlign: "center", padding: 30 }}>
+            <h3 className="h3">Project not found</h3>
+            <p className="muted" style={{ fontSize: 13.5, marginTop: 8 }}>It may have been deleted, or belongs to another account.</p>
+            <div style={{ marginTop: 18 }}><Btn kind="primary" icon="arrow-left" onClick={onBack}>Back to projects</Btn></div>
+          </Card>
+        ) : (
+          <span className="muted" style={{ fontSize: 13.5 }}>Loading project…</span>
+        )}
+      </div>
+    );
+  }
   const [dot, lab] = SS[s.status];
   const running = s.status === "running";
   const failed = s.status === "failed";
