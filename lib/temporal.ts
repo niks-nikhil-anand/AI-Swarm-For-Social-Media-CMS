@@ -27,7 +27,7 @@ export async function getTemporalClient(): Promise<Client> {
 export async function startResearchWorkflow(input: {
   projectId: string;
   goal: string;
-  agentIds: string[];
+  agents: { id: string; slug: string }[];
 }): Promise<string> {
   const client = await getTemporalClient();
   const handle = await client.workflow.start("researchProjectWorkflow", {
