@@ -1,6 +1,10 @@
 // Research worker entry point. Run with: npm run worker
 // Requires the Temporal server from docker-compose to be up.
 
+// Load .env before anything touches process.env (tsx doesn't auto-load it
+// the way `next dev` does — without this, Prisma gets no DATABASE_URL).
+import "dotenv/config";
+
 import { Worker } from "@temporalio/worker";
 import * as activities from "./activities";
 

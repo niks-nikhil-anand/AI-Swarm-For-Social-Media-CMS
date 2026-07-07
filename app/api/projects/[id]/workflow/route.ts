@@ -15,7 +15,7 @@ export async function POST(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { agents: { select: { id: true } } },
+    include: { agents: { select: { id: true, slug: true } } },
   });
   if (!project || project.userId !== userId) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -38,7 +38,7 @@ export async function POST(
     const workflowId = await startResearchWorkflow({
       projectId,
       goal: project.goal,
-      agentIds: project.agents.map((a) => a.id),
+      agents: project.agents.map((a) => ({ id: a.id, slug: a.slug })),
     });
 
     await prisma.project.update({
