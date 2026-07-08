@@ -50,7 +50,6 @@ function mapDbProject(p: {
   };
 }
 
-function money(n: number) { return "$" + n.toFixed(2); }
 const SS: Record<string, [string, string]> = { running: ["running", "Running"], complete: ["done", "Complete"], failed: ["error", "Failed"] };
 
 /* ---- document-style output preview (PDF / DOCX / blog / md) ---- */
@@ -122,11 +121,24 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
   useEffect(() => {
     if (!id || mock) return;
     let cancelled = false;
-    fetch(`/api/projects/${id}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("not found"))))
-      .then((data) => { if (!cancelled) setFetched(mapDbProject(data)); })
-      .catch(() => { if (!cancelled) setNotFound(true); });
-    return () => { cancelled = true; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("not found");
+        const project = mapDbProject(await res.json());
+        if (cancelled) return;
+        setFetched(project);
+        setNotFound(false);
+        if (project.status === "running") timer = setTimeout(load, 3000);
+      } catch {
+        if (!cancelled) setNotFound(true);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -213,10 +225,7 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
           </div>
 
           <div style={{ padding: "10px 18px", borderBottom: "1px solid var(--border)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "8px 0 10px" }}>
-              <span className="eyebrow" style={{ whiteSpace: "nowrap" }}>API cost</span>
-              <span className="mono" style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{money(s.cost)}</span>
-            </div>
+            <div className="eyebrow" style={{ margin: "8px 0 10px" }}>Usage</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               {([["Input tokens", (s.tokIn / 1e6).toFixed(2) + "M", "var(--blue)"], ["Output tokens", (s.tokOut / 1e6).toFixed(2) + "M", "var(--purple)"], ["Web searches", String(s.searches), "var(--cyan)"]] as [string, string, string][]).map(([k, v, c]) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
