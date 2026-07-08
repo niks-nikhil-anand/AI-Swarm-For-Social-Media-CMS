@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUserId } from "../../../../lib/auth";
+import { getWorkflowStatus } from "../../../../lib/temporal";
 
 // GET /api/projects/[id] — full project detail (agents, sources, counts).
 export async function GET(
@@ -16,6 +17,18 @@ export async function GET(
     include: {
       agents: { orderBy: { layer: "asc" } },
       sources: true,
+      slides: { orderBy: { n: "asc" } },
+      timelineEvents: {
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        include: { projectAgent: { select: { name: true, slug: true, accent: true } } },
+      },
+      searchResults: { orderBy: [{ retrievedAt: "desc" }, { rank: "asc" }], take: 100 },
+      evidence: {
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: { projectAgent: { select: { name: true, slug: true } } },
+      },
       _count: { select: { searchResults: true, slides: true } },
     },
   });
@@ -23,31 +36,93 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
+  // Reconcile the small failure window between the last agent finishing and
+  // the workflow's final project update. Agent state is persisted first, so a
+  // run with every agent Done must not remain displayed as Running.
+  const allAgentsDone = project.agents.length > 0 && project.agents.every((agent) => agent.status === "Done");
+  let effectiveStatus = project.status;
+  let effectiveCompletedAt = project.completedAt;
+  let effectiveDuration = project.durationSeconds;
+  let terminalStatus: "Complete" | "Failed" | null = null;
+  if (project.status === "Running") {
+    if (allAgentsDone) {
+      terminalStatus = "Complete";
+    } else {
+      const workflowStatus = await getWorkflowStatus(`research-${project.id}`, 1500);
+      if (workflowStatus === "COMPLETED") terminalStatus = "Complete";
+      if (["FAILED", "CANCELLED", "TERMINATED", "TIMED_OUT"].includes(workflowStatus)) terminalStatus = "Failed";
+    }
+  }
+  if (terminalStatus) {
+    const completedAt = new Date();
+    const durationSeconds = Math.max(0, Math.round((completedAt.getTime() - project.createdAt.getTime()) / 1000));
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { status: terminalStatus, completedAt, durationSeconds },
+    });
+    effectiveStatus = terminalStatus;
+    effectiveCompletedAt = completedAt;
+    effectiveDuration = durationSeconds;
+  }
+
   return NextResponse.json({
     id: project.id,
     title: project.title,
     goal: project.goal,
     format: project.format,
-    status: project.status,
+    status: effectiveStatus,
     cost: project.cost,
     tokensIn: project.tokensIn,
     tokensOut: project.tokensOut,
     searches: project.searches,
-    durationSeconds: project.durationSeconds,
+    durationSeconds: effectiveDuration,
     wordCount: project.wordCount,
     summary: project.summary,
     createdAt: project.createdAt.toISOString(),
-    completedAt: project.completedAt?.toISOString() ?? null,
+    completedAt: effectiveCompletedAt?.toISOString() ?? null,
     agents: project.agents.map((a) => ({
       id: a.id, slug: a.slug, name: a.name, short: a.short, icon: a.icon,
       accent: a.accent, role: a.role, why: a.why, deps: a.deps, layer: a.layer,
       status: a.status, progress: a.progress,
+      startedAt: a.startedAt?.toISOString() ?? null,
+      completedAt: a.completedAt?.toISOString() ?? null,
     })),
     sources: project.sources.map((s) => ({
       id: s.id, host: s.host, title: s.title, by: s.by, verified: s.verified,
     })),
     searchResultsCount: project._count.searchResults,
     slidesCount: project._count.slides,
+    slides: project.slides,
+    timeline: project.timelineEvents.map((event) => ({
+      id: event.id,
+      type: event.type,
+      text: event.text,
+      url: event.url,
+      topic: event.topic,
+      createdAt: event.createdAt.toISOString(),
+      agent: event.projectAgent,
+    })),
+    searchResults: project.searchResults.map((result) => ({
+      id: result.id,
+      query: result.query,
+      rank: result.rank,
+      title: result.title,
+      url: result.url,
+      snippet: result.snippet,
+      engine: result.engine,
+      retrievedAt: result.retrievedAt.toISOString(),
+    })),
+    evidence: project.evidence.map((item) => ({
+      id: item.id,
+      content: item.content,
+      topic: item.topic,
+      sourceUrl: item.sourceUrl,
+      sourceTitle: item.sourceTitle,
+      verified: item.verified,
+      verifiedBy: item.verifiedBy,
+      createdAt: item.createdAt.toISOString(),
+      agent: item.projectAgent,
+    })),
   });
 }
 
