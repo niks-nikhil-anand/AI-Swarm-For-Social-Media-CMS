@@ -13,11 +13,21 @@ const PROJECT_STATUS_MAP: Record<string, string> = { Draft: "running", Running: 
 function useRecentProjects(): RecentProject[] {
   const [projects, setProjects] = useState<RecentProject[]>([]);
   useEffect(() => {
-    fetch("/api/projects")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((rows: { id: string; title: string; status: string }[]) =>
-        setProjects(rows.map((r) => ({ id: r.id, title: r.title, status: PROJECT_STATUS_MAP[r.status] || "running", accent: "var(--accent)" }))))
-      .catch(() => setProjects([]));
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const res = await fetch("/api/projects", { cache: "no-store" });
+        const rows: { id: string; title: string; status: string }[] = res.ok ? await res.json() : [];
+        if (!cancelled) {
+          setProjects(rows.map((r) => ({ id: r.id, title: r.title, status: PROJECT_STATUS_MAP[r.status] || "running", accent: "var(--accent)" })));
+        }
+      } catch {
+        if (!cancelled) setProjects([]);
+      }
+    }
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
   return projects;
 }

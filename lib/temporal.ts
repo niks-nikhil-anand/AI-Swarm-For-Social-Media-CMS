@@ -48,13 +48,23 @@ export type WorkflowStatusName =
   | "CONTINUED_AS_NEW"
   | "UNKNOWN";
 
-export async function getWorkflowStatus(workflowId: string): Promise<WorkflowStatusName> {
-  const client = await getTemporalClient();
-  try {
-    const handle = client.workflow.getHandle(workflowId);
-    const description = await handle.describe();
-    return (description.status.name?.toUpperCase() as WorkflowStatusName) ?? "UNKNOWN";
-  } catch {
-    return "UNKNOWN";
-  }
+export async function getWorkflowStatus(workflowId: string, timeoutMs = 2000): Promise<WorkflowStatusName> {
+  const inspect = async (): Promise<WorkflowStatusName> => {
+    try {
+      const client = await getTemporalClient();
+      const handle = client.workflow.getHandle(workflowId);
+      const description = await handle.describe();
+      return (description.status.name?.toUpperCase() as WorkflowStatusName) ?? "UNKNOWN";
+    } catch {
+      return "UNKNOWN";
+    }
+  };
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<WorkflowStatusName>((resolve) => {
+    timer = setTimeout(() => resolve("UNKNOWN"), timeoutMs);
+  });
+  const status = await Promise.race([inspect(), timeout]);
+  if (timer) clearTimeout(timer);
+  return status;
 }
