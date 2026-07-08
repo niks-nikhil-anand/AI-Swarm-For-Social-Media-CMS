@@ -6,11 +6,10 @@ import { useState, useEffect, useCallback, useSyncExternalStore, type CSSPropert
 import { useRouter } from "next/navigation";
 import { Icon } from "./ui";
 import { Sidebar, TopBar } from "./Shell";
-import { Define } from "./Define";
+import { Define, type ProjectBrief } from "./Define";
 import { Roles } from "./Roles";
 import { Run } from "./Run";
 import { Output } from "./Output";
-import { SessionDetail } from "./SessionDetail";
 import type { Stage } from "./ui";
 import type { Agent } from "./data";
 
@@ -25,6 +24,21 @@ const STAGES: Stage[] = [
 ];
 const STAGE_STATUS: Record<string, string> = { define: "drafting", roles: "awaiting", run: "running", output: "complete" };
 const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
+const DEFAULT_BRIEF: ProjectBrief = {
+  goal: "Research the impact of quantum computing on cryptography and produce a 10-slide PowerPoint for a security leadership audience.",
+  format: "pptx",
+  tone: "Executive",
+  length: "10 slides",
+  audience: "CISO, security leadership, board",
+  sources: "NIST, NCSC",
+  instructions: "Prefer probability framing over fixed dates. Cite every quantitative claim.",
+};
+
+function titleFromGoal(goal: string): string {
+  const clean = goal.replace(/\s+/g, " ").trim();
+  const firstSentence = clean.split(/[.!?](?:\s|$)/)[0] || clean;
+  return firstSentence.length <= 72 ? firstSentence : `${firstSentence.slice(0, 69).trimEnd()}…`;
+}
 
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
 const TWEAK_DEFAULTS: Tweaks = { theme: "dark", accent: "blue", density: "comfortable", motion: 60 };
@@ -87,12 +101,12 @@ export default function SwarmApp() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [screen, setScreen] = useState("define");
   const [, setFlowScreen] = useState("define");
-  const [activeSession, setActiveSession] = useState<string | null>(null);
   const [reached, setReached] = useState<string[]>(["define", "history"]);
   const [runLayout, setRunLayout] = useState<"split" | "graph" | "logs">("split");
   const [graphLayout, setGraphLayout] = useState<"layered" | "vertical" | "radial">("layered");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [brief, setBrief] = useState<ProjectBrief>(DEFAULT_BRIEF);
 
   // apply tweaks to document
   useEffect(() => {
@@ -120,13 +134,14 @@ export default function SwarmApp() {
       try {
         const res = await fetch("/api/projects");
         if (!res.ok || cancelled) return;
-        const projects: { id: string; status: string; agentsCount: number }[] = await res.json();
+        const projects: { id: string; title: string; goal: string; format: string; status: string; agentsCount: number }[] = await res.json();
         const active =
           (stored && projects.find((p) => p.id === stored && (p.status === "Running" || p.status === "Draft"))) ||
           projects.find((p) => p.status === "Running");
         if (!active || cancelled) return;
 
         setProjectId(active.id);
+        setBrief((current) => ({ ...current, goal: active.goal, format: active.format }));
         try { sessionStorage.setItem(PROJECT_ID_KEY, active.id); } catch { /* ignore */ }
         setReached((p) => Array.from(new Set([...p, "roles", "run", "output"])));
         setScreen("run");
@@ -143,7 +158,7 @@ export default function SwarmApp() {
   const FLOW = ["define", "roles", "run", "output"];
   function go(key: string) { setScreen(key); if (FLOW.includes(key)) setFlowScreen(key); }
 
-  function onPropose() { reach("roles"); go("roles"); pushToast({ icon: "wand", title: "Team proposed", body: "7 specialist agents are ready for your approval." }); }
+  function onPropose(nextBrief: ProjectBrief) { setBrief(nextBrief); reach("roles"); go("roles"); pushToast({ icon: "wand", title: "Team proposed", body: "7 specialist agents are ready for your approval." }); }
   function onLaunch(roster: Agent[]) {
     reach("run", "output"); go("run");
     pushToast({ icon: "play", title: "Swarm launched", body: `${roster.length} agents are now researching live.` });
@@ -154,9 +169,9 @@ export default function SwarmApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: PROJECT_TITLE,
-          goal: PROJECT_TITLE,
-          format: "deck",
+          title: titleFromGoal(brief.goal),
+          goal: brief.goal,
+          format: brief.format,
           agents: roster.map((a) => ({
             id: a.id, name: a.name, short: a.short, icon: a.icon, accent: a.accent,
             role: a.role, why: a.why, deps: a.deps, layer: a.layer,
@@ -185,15 +200,13 @@ export default function SwarmApp() {
       try { sessionStorage.removeItem(PROJECT_ID_KEY); } catch { /* ignore */ }
     }
   }
-  function onRerun() { go("roles"); pushToast({ icon: "reload", title: "Cloned to Roles", body: "Adjust the team and launch again." }); }
-  function onNew() { setReached(["define", "history"]); go("define"); }
-  function openLive() { reach("run", "output"); setScreen("run"); setFlowScreen("run"); }
+  function onRerun() { setProjectId(null); try { sessionStorage.removeItem(PROJECT_ID_KEY); } catch { /* ignore */ } go("roles"); pushToast({ icon: "reload", title: "Cloned to Roles", body: "Adjust the team and launch again." }); }
+  function onNew() { setProjectId(null); setBrief(DEFAULT_BRIEF); try { sessionStorage.removeItem(PROJECT_ID_KEY); } catch { /* ignore */ } setReached(["define", "history"]); go("define"); }
   function openSession(id: string) {
-    if (id === "p1") { openLive(); return; }
-    setActiveSession(id); setScreen("session");
+    router.push(`/projects/${id}`);
   }
 
-  const PROJECT_TITLE = "Quantum computing × cryptography";
+  const PROJECT_TITLE = titleFromGoal(brief.goal);
   const TITLES: Record<string, string> = { session: "Projects" };
   const topTitle = FLOW.includes(screen) ? PROJECT_TITLE : (TITLES[screen] || "Swarm");
   const status = STAGE_STATUS[screen] || null;
@@ -207,7 +220,7 @@ export default function SwarmApp() {
 
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
-      <Sidebar view={sidebarView} activeSession={activeSession}
+      <Sidebar view={sidebarView} activeSession={null}
         onNew={onNew} onGo={({ view }) => {
           const route = SIDEBAR_ROUTES[view];
           if (route) router.push(route); else go(view);
@@ -225,7 +238,6 @@ export default function SwarmApp() {
           {screen === "roles" && <Roles onLaunch={onLaunch} />}
           {screen === "run" && <Run onComplete={onComplete} runLayout={runLayout} setRunLayout={setRunLayout} graphLayout={graphLayout} setGraphLayout={setGraphLayout} motion={t.motion} projectId={projectId} />}
           {screen === "output" && <Output onRerun={onRerun} />}
-          {screen === "session" && <SessionDetail id={activeSession} onBack={() => router.push("/projects")} onOpenLive={openLive} onRerun={onRerun} />}
         </div>
       </main>
 

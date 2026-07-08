@@ -2,7 +2,7 @@
 /* ============================================================
    SWARM — Stage 1: Define
    ============================================================ */
-import { useState, useEffect, useRef, type CSSProperties, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, Btn, Badge, Segmented } from "./ui";
 import { FORMATS, type OutputFormat } from "./data";
 
@@ -108,11 +108,16 @@ function AdvTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 
 /* ---------- Advanced settings drawer ---------- */
 function AdvancedDrawer({
-  open, onClose, tone, setTone, length, setLength,
+  open, onClose, tone, setTone, length, setLength, audience, setAudience,
+  sources, setSources, instructions, setInstructions, onReset,
 }: {
   open: boolean; onClose: () => void;
   tone: string; setTone: (v: string) => void;
   length: string; setLength: (v: string) => void;
+  audience: string; setAudience: (v: string) => void;
+  sources: string; setSources: (v: string) => void;
+  instructions: string; setInstructions: (v: string) => void;
+  onReset: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -167,18 +172,18 @@ function AdvancedDrawer({
             <Segmented options={["6 slides", "10 slides", "16 slides"]} value={length} onChange={setLength} size="sm" />
           </Field>
           <Field label="Target audience" hint="Who will read or present this output">
-            <AdvInput defaultValue="CISO, security leadership, board" />
+            <AdvInput value={audience} onChange={(event) => setAudience(event.target.value)} />
           </Field>
           <Field label="Must-include sources" hint="Comma separated domains">
-            <AdvInput defaultValue="NIST, NCSC" placeholder="nist.gov, ncsc.gov.uk" />
+            <AdvInput value={sources} onChange={(event) => setSources(event.target.value)} placeholder="nist.gov, ncsc.gov.uk" />
           </Field>
           <Field label="Custom instructions">
-            <AdvTextarea rows={4} defaultValue="Prefer probability framing over fixed dates. Cite every quantitative claim." />
+            <AdvTextarea rows={4} value={instructions} onChange={(event) => setInstructions(event.target.value)} />
           </Field>
         </div>
 
         <div style={{ display: "flex", gap: 10, padding: 16, borderTop: "1px solid var(--border-soft)" }}>
-          <Btn kind="ghost" size="md" style={{ flex: 1 }}>Reset to defaults</Btn>
+          <Btn kind="ghost" size="md" style={{ flex: 1 }} onClick={onReset}>Reset to defaults</Btn>
           <Btn kind="primary" size="md" style={{ flex: 1 }} onClick={onClose}>Apply</Btn>
         </div>
       </div>
@@ -186,29 +191,43 @@ function AdvancedDrawer({
   );
 }
 
-export function Define({ onPropose }: { onPropose: () => void }) {
+export interface ProjectBrief {
+  goal: string;
+  format: string;
+  tone: string;
+  length: string;
+  audience: string;
+  sources: string;
+  instructions: string;
+}
+
+export function Define({ onPropose }: { onPropose: (brief: ProjectBrief) => void }) {
   const [topic, setTopic] = useState("Research the impact of quantum computing on cryptography and produce a 10-slide PowerPoint for a security leadership audience.");
   const [fmt, setFmt] = useState("pptx");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tone, setTone] = useState("Executive");
   const [length, setLength] = useState("10 slides");
+  const [audience, setAudience] = useState("CISO, security leadership, board");
+  const [sources, setSources] = useState("NIST, NCSC");
+  const [instructions, setInstructions] = useState("Prefer probability framing over fixed dates. Cite every quantitative claim.");
   const [focused, setFocused] = useState(false);
   const [advHover, setAdvHover] = useState(false);
   const valid = topic.trim().length > 12;
   const near = topic.length >= GOAL_MIN && topic.length <= GOAL_MAX;
   const fmtLabel = FORMATS.find((f) => f.id === fmt)?.label || "—";
+  const submit = useCallback(() => onPropose({ goal: topic.trim(), format: fmt, tone, length, audience: audience.trim(), sources: sources.trim(), instructions: instructions.trim() }), [topic, fmt, tone, length, audience, sources, instructions, onPropose]);
 
   /* ⌘↵ / Ctrl+↵ submits from anywhere on the stage */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && valid && !drawerOpen) {
         e.preventDefault();
-        onPropose();
+        submit();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [valid, drawerOpen, onPropose]);
+  }, [valid, drawerOpen, submit]);
 
   /* Roving arrow-key selection inside the format radio group */
   const onFormatKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -385,12 +404,14 @@ export function Define({ onPropose }: { onPropose: () => void }) {
                 ))}
               </span>
             )}
-            <Btn kind="primary" size="lg" icon="wand" disabled={!valid} onClick={onPropose}>Propose agent team</Btn>
+            <Btn kind="primary" size="lg" icon="wand" disabled={!valid} onClick={submit}>Propose agent team</Btn>
           </div>
         </div>
       </div>
 
-      <AdvancedDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} tone={tone} setTone={setTone} length={length} setLength={setLength} />
+      <AdvancedDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} tone={tone} setTone={setTone} length={length} setLength={setLength}
+        audience={audience} setAudience={setAudience} sources={sources} setSources={setSources} instructions={instructions} setInstructions={setInstructions}
+        onReset={() => { setTone("Executive"); setLength("10 slides"); setAudience("CISO, security leadership, board"); setSources("NIST, NCSC"); setInstructions("Prefer probability framing over fixed dates. Cite every quantitative claim."); }} />
     </div>
   );
 }
