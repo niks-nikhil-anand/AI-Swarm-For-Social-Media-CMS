@@ -259,6 +259,7 @@ export default function SettingsPage() {
   const [modal, setModal] = useState(false);
 
   const backHome = () => router.push("/");
+  const openProject = (id: string) => router.push(`/projects/${id}`);
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     router.push("/login");
@@ -267,7 +268,7 @@ export default function SettingsPage() {
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view="settings" activeSession={null}
-        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
+        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={openProject} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar stages={null} stage="settings" reached={["settings"]} onJump={() => {}} status={null} title="Settings" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
         <div style={{ overflow: "auto", height: "100%", padding: "32px 24px" }}>

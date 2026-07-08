@@ -53,6 +53,12 @@ interface RosterAgent {
   layer?: number;
 }
 
+function titleFromGoal(goal: string): string {
+  const clean = goal.replace(/\s+/g, " ").trim();
+  const firstSentence = clean.split(/[.!?](?:\s|$)/)[0] || clean;
+  return firstSentence.length <= 72 ? firstSentence : `${firstSentence.slice(0, 69).trimEnd()}…`;
+}
+
 // POST /api/projects — create a draft project with its frozen agent team
 // (used when a run is launched).
 export async function POST(req: NextRequest) {
@@ -67,8 +73,8 @@ export async function POST(req: NextRequest) {
   }
 
   const { title, goal, format, agents } = body;
-  if (!title?.trim() || !goal?.trim()) {
-    return NextResponse.json({ error: "title and goal are required" }, { status: 400 });
+  if (!goal?.trim()) {
+    return NextResponse.json({ error: "goal is required" }, { status: 400 });
   }
 
   const roster = (agents ?? []).filter((a) => a.name?.trim());
@@ -76,7 +82,7 @@ export async function POST(req: NextRequest) {
   const project = await prisma.project.create({
     data: {
       userId,
-      title: title.trim(),
+      title: title?.trim() || titleFromGoal(goal),
       goal: goal.trim(),
       format: format?.trim() || "deck",
       agents: {
@@ -97,7 +103,7 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(
-    { id: project.id, status: project.status, agents: project.agents },
+    { id: project.id, title: project.title, goal: project.goal, format: project.format, status: project.status, agents: project.agents },
     { status: 201 }
   );
 }
