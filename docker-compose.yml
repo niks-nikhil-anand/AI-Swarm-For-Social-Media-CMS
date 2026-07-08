@@ -55,5 +55,20 @@ services:
       - temporal
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      SEARXNG_URL: http://searxng:8080
+    depends_on:
+      - temporal
+      - searxng
+    restart: unless-stopped
+
 volumes:
   postgres_data:
