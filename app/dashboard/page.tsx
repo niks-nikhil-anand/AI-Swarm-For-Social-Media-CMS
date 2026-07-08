@@ -133,6 +133,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const HSTATUS: Record<string, [string, string]> = { running: ["Running", "working"], complete: ["Complete", "done"], failed: ["Failed", "error"] };
   const backHome = () => router.push("/");
+  const openProject = (id: string) => router.push(`/projects/${id}`);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -155,7 +156,7 @@ export default function DashboardPage() {
     return (
       <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
         <Sidebar view="dashboard" activeSession={null}
-          onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
+          onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={openProject} />
         <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
           <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & Analytics" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
           <div style={{ padding: "32px 24px" }}>
@@ -193,7 +194,7 @@ export default function DashboardPage() {
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view="dashboard" activeSession={null}
-        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
+        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={openProject} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar stages={null} stage="dashboard" reached={["dashboard"]} onJump={() => {}} status={null} title="Usage & Analytics" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
         <div style={{ overflow: "auto", height: "100%", padding: "32px 24px 48px" }}>
