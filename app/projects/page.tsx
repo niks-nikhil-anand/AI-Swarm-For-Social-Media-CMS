@@ -114,7 +114,8 @@ function HistoryCard({ p, onOpen }: { p: Project; onOpen: (id: string) => void }
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: st.color }}><StatusDot status={st.dot} size={6} />{st.label}</span>
           <span className="faint" style={{ fontSize: 11, marginLeft: "auto", whiteSpace: "nowrap" }}>{p.date}</span>
         </div>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", lineHeight: 1.35, minHeight: 36, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title}</div>
+        <div className="muted" style={{ fontSize: 11.5, lineHeight: 1.45, minHeight: 32, marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.goal}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
           <Badge tone="neutral" icon={p.fmtIcon}>{p.fmt}</Badge>
           <span className="faint" style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="users" size={12} color="var(--faint)" />{p.agents}</span>
@@ -145,6 +146,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const backHome = () => router.push("/");
+  const openProject = (id: string) => router.push(`/projects/${id}`);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -160,7 +162,7 @@ export default function ProjectsPage() {
   return (
     <div style={{ height: "100vh", display: "flex", background: "var(--bg)", color: "var(--text)" } as CSSProperties}>
       <Sidebar view="history" activeSession={null}
-        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={backHome} />
+        onNew={backHome} onGo={({ view }) => router.push(SIDEBAR_ROUTES[view] || "/")} onOpenSession={openProject} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <TopBar stages={null} stage="history" reached={["history"]} onJump={() => {}} status={null} title="Projects" theme={t.theme} onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")} />
         <div style={{ overflow: "auto", height: "100%", padding: "32px 24px" }}>
@@ -189,19 +191,20 @@ export default function ProjectsPage() {
               </Card>
             ) : view === "grid" ? (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-                {projects.map((p) => <HistoryCard key={p.id} p={p} onOpen={backHome} />)}
+                {projects.map((p) => <HistoryCard key={p.id} p={p} onOpen={openProject} />)}
               </div>
             ) : (
               <Card style={{ padding: 0, overflow: "hidden" }}>
                 {projects.map((p, i) => {
                   const st = HSTATUS[p.status];
                   return (
-                    <div key={p.id} onClick={backHome} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderTop: i ? "1px solid var(--border-soft)" : "none", cursor: "pointer" }}
+                    <div key={p.id} onClick={() => openProject(p.id)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderTop: i ? "1px solid var(--border-soft)" : "none", cursor: "pointer" }}
                       onMouseEnter={(e) => e.currentTarget.style.background = "var(--elevated)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                       <span style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--elevated)", color: p.accent }}><Icon name={p.fmtIcon} size={16} /></span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.title}</div>
-                        <div className="faint" style={{ fontSize: 11.5 }}>{p.fmt} · {p.agents} agents · {p.date}</div>
+                        <div className="faint" style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.goal}</div>
+                        <div className="faint" style={{ fontSize: 11 }}>{p.fmt} · {p.agents} agents · {p.date}</div>
                       </div>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: st.color }}><StatusDot status={st.dot} size={6} />{st.label}</span>
                       <div style={{ display: "flex", gap: 4 }}>
