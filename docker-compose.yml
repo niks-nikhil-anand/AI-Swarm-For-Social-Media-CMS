@@ -1,6 +1,5 @@
 # Local infrastructure for Swarm: PostgreSQL, SearXNG, Temporal + UI.
-# App DB defaults to the DATABASE_URL in .env (e.g. Neon); the postgres
-# service here backs Temporal and can also serve as a local app DB.
+# All services use the local PostgreSQL database defined below.
 
 services:
   postgres:
@@ -66,8 +65,12 @@ services:
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       SEARXNG_URL: http://searxng:8080
     depends_on:
-      - temporal
-      - searxng
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      searxng:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
