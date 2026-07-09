@@ -184,14 +184,18 @@ export async function markProjectComplete(input: {
     where: { id: input.projectId },
     select: { createdAt: true },
   });
+
+  if (!project) {
+    console.warn(`Project not found: ${input.projectId}`);
+    return;
+  }
+
   await prisma.project.update({
     where: { id: input.projectId },
     data: {
       status: input.failed ? "Failed" : "Complete",
       completedAt: new Date(),
-      durationSeconds: project
-        ? Math.round((Date.now() - project.createdAt.getTime()) / 1000)
-        : undefined,
+      durationSeconds: Math.round((Date.now() - project.createdAt.getTime()) / 1000),
       summary: input.summary?.slice(0, 2000),
       wordCount: input.wordCount,
     },
