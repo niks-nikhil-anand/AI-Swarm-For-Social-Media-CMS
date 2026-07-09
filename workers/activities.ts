@@ -116,41 +116,47 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentOutput> {
       (result.output.narrativeArc as string | undefined) ||
       `${spec.title} finished its task.`;
 
-    await prisma.$transaction([
-      prisma.projectAgent.updateMany({
-        where: { id: agentDbId, projectId },
-        data: { status: "Done", progress: 100, completedAt: new Date() },
-      }),
-      prisma.timelineEvent.create({
-        data: {
-          projectId,
-          projectAgentId: agentDbId,
-          type: "Note",
-          topic: spec.title,
-          text: String(digest).slice(0, 800),
-        },
-      }),
-      prisma.project.update({
-        where: { id: projectId },
-        data: {
-          tokensIn: { increment: result.usage.promptTokens },
-          tokensOut: { increment: result.usage.completionTokens },
-        },
-      }),
-    ]);
+    await prisma.$transaction(
+      [
+        prisma.projectAgent.updateMany({
+          where: { id: agentDbId, projectId },
+          data: { status: "Done", progress: 100, completedAt: new Date() },
+        }),
+        prisma.timelineEvent.create({
+          data: {
+            projectId,
+            projectAgentId: agentDbId,
+            type: "Note",
+            topic: spec.title,
+            text: String(digest).slice(0, 800),
+          },
+        }),
+        prisma.project.update({
+          where: { id: projectId },
+          data: {
+            tokensIn: { increment: result.usage.promptTokens },
+            tokensOut: { increment: result.usage.completionTokens },
+          },
+        }),
+      ],
+      { timeout: 30000 }
+    );
 
     return { slug, model: result.model, output: result.output };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await prisma.$transaction([
-      prisma.projectAgent.updateMany({
-        where: { id: agentDbId, projectId },
-        data: { status: "Error" },
-      }),
-      prisma.timelineEvent.create({
-        data: { projectId, projectAgentId: agentDbId, type: "Error", text: message.slice(0, 500) },
-      }),
-    ]);
+    await prisma.$transaction(
+      [
+        prisma.projectAgent.updateMany({
+          where: { id: agentDbId, projectId },
+          data: { status: "Error" },
+        }),
+        prisma.timelineEvent.create({
+          data: { projectId, projectAgentId: agentDbId, type: "Error", text: message.slice(0, 500) },
+        }),
+      ],
+      { timeout: 30000 }
+    );
     throw err;
   }
 }

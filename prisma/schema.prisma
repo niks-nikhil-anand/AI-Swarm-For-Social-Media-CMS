@@ -11,6 +11,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // CONNECTION_POOL_SIZE and TIMEOUT are passed via DATABASE_URL query params
+  // Example: postgresql://user:pass@host/db?schema=public&connection_limit=20&statement_timeout=30000
 }
 
 /* ---------- Enums ---------- */
