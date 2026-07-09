@@ -77,6 +77,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "goal is required" }, { status: 400 });
   }
 
+  // Ensure user exists in database (create if needed for session-based users)
+  await prisma.user.upsert({
+    where: { id: userId },
+    update: {},
+    create: {
+      id: userId,
+      email: `user-${userId}@localhost`,
+      passwordHash: "",
+    },
+  });
+
   const roster = (agents ?? []).filter((a) => a.name?.trim());
 
   const project = await prisma.project.create({
