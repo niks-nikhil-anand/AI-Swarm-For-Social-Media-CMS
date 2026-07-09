@@ -12,4 +12,5 @@ COPY generated ./generated
 COPY lib ./lib
 COPY workers ./workers
 
-CMD ["npm", "run", "worker"]
+# Run database migrations before starting the worker
+CMD sh -c "npx prisma migrate deploy && npm run worker"
