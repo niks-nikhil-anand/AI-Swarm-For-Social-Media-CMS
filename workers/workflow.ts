@@ -7,7 +7,7 @@
 import { proxyActivities } from "@temporalio/workflow";
 import type * as activities from "./activities";
 
-const { performSearch, runAgent, markProjectComplete } = proxyActivities<typeof activities>({
+const { performSearch, runAgent, saveDeck, markProjectComplete } = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   retry: {
     initialInterval: "2s",
@@ -120,6 +120,7 @@ export async function researchProjectWorkflow(
       });
       outputs.deck = deck.output;
       stagesRun.push("designer");
+      await saveDeck({ projectId, deck: deck.output });
     }
 
     // 6. Synthesis Agent — final quality gate and unified deliverable.
