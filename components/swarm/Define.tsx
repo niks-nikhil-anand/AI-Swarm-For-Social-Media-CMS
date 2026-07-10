@@ -7,9 +7,7 @@ import { Icon, Btn, Badge, Segmented } from "./ui";
 import { FORMATS, type OutputFormat } from "./data";
 
 const SUGGESTIONS = [
-  { icon: "bar-chart", label: "State of AI agents 2026" },
-  { icon: "layers", label: "Vector DB teardown" },
-  { icon: "shield", label: "Stablecoin regulation scan" },
+  { icon: "search", label: "Ask your own research question..." },
 ];
 
 const GOAL_MIN = 80;

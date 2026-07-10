@@ -5,7 +5,7 @@
 import { useState, useEffect } from "react";
 import { Icon, Btn, IconBtn, Badge, Card, Ring, StatusDot } from "./ui";
 import { Slide } from "./Output";
-import { SLIDES, SOURCES, HISTORY, type Project } from "./data";
+import { type Project } from "./data";
 
 const FMT_LABELS: Record<string, [string, string]> = {
   deck: ["PowerPoint", "layers"], pdf: ["PDF Report", "file-text"], docx: ["DOCX", "file-text"],
@@ -92,15 +92,16 @@ function DocPreview({ s }: { s: Project }) {
   );
 }
 
-function PptxPreview() {
+function PptxPreview({ slides }: { slides: any[] }) {
   const [idx, setIdx] = useState(0);
+  if (!slides.length) return <div style={{ padding: "24px", textAlign: "center", color: "var(--muted)" }}>No slides generated yet</div>;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px", gap: 16 }}>
-      <div style={{ width: "100%", maxWidth: 680 }}><Slide s={SLIDES[idx]} scale={0.68} /></div>
+      <div style={{ width: "100%", maxWidth: 680 }}><Slide s={slides[idx]} scale={0.68} /></div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <IconBtn name="chevron-left" title="Previous" onClick={() => setIdx((i) => Math.max(0, i - 1))} />
-        <span className="mono" style={{ fontSize: 12.5, color: "var(--muted)", minWidth: 60, textAlign: "center" }}>{String(idx + 1).padStart(2, "0")} / {SLIDES.length}</span>
-        <IconBtn name="chevron-right" title="Next" onClick={() => setIdx((i) => Math.min(SLIDES.length - 1, i + 1))} />
+        <span className="mono" style={{ fontSize: 12.5, color: "var(--muted)", minWidth: 60, textAlign: "center" }}>{String(idx + 1).padStart(2, "0")} / {slides.length}</span>
+        <IconBtn name="chevron-right" title="Next" onClick={() => setIdx((i) => Math.min(slides.length - 1, i + 1))} />
       </div>
     </div>
   );
@@ -113,13 +114,14 @@ function MetaRow({ k, v, mono }: { k: string; v: React.ReactNode; mono?: boolean
 export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
   id: string | null; onBack: () => void; onOpenLive: () => void; onRerun: () => void;
 }) {
-  const mock = HISTORY.find((x) => x.id === id) ?? null;
   const [fetched, setFetched] = useState<Project | null>(null);
+  const [slides, setSlides] = useState<any[]>([]);
+  const [sources, setSources] = useState<any[]>([]);
   const [notFound, setNotFound] = useState(false);
 
-  // Real project ids come from the DB — fetch them instead of showing a mock.
+  // Fetch real project data from the database
   useEffect(() => {
-    if (!id || mock) return;
+    if (!id) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -127,10 +129,15 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
       try {
         const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
         if (!res.ok) throw new Error("not found");
-        const project = mapDbProject(await res.json());
+        const data = await res.json();
         if (cancelled) return;
+
+        const project = mapDbProject(data);
         setFetched(project);
+        setSlides(data.slides || []);
+        setSources(data.sources || []);
         setNotFound(false);
+
         if (project.status === "running") timer = setTimeout(load, 3000);
       } catch {
         if (!cancelled) setNotFound(true);
@@ -142,7 +149,7 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const s = mock ?? fetched;
+  const s = fetched;
   if (!s) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -206,7 +213,7 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
                 </div>
               </Card>
             </div>
-          ) : s.kind === "pptx" ? <PptxPreview /> : <DocPreview s={s} />}
+          ) : s.kind === "pptx" ? <PptxPreview slides={slides} /> : <DocPreview s={s} />}
         </div>
 
         <div style={{ width: 320, flexShrink: 0, borderLeft: "1px solid var(--border)", overflow: "auto", background: "var(--surface)" }}>
@@ -242,15 +249,19 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
               <span className="eyebrow">Sources</span><Badge tone="neutral">{s.sourcesN}</Badge>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {SOURCES.slice(0, s.kind === "pptx" ? 7 : 5).map((src, i) => (
-                <a key={i} href="#" onClick={(e) => e.preventDefault()} style={{ display: "flex", gap: 9, padding: 9, borderRadius: "var(--r-sm)", background: "var(--elevated)", border: "1px solid var(--border)" }}>
-                  <span style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-2)", color: "var(--st-working)" }}><Icon name="globe" size={11} /></span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span className="mono" style={{ fontSize: 10.5, color: "var(--accent-2)" }}>{src.host}</span>
-                    <div style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{src.title}</div>
-                  </div>
-                </a>
-              ))}
+              {sources.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--muted)", padding: "8px 0" }}>No sources available yet</div>
+              ) : (
+                sources.slice(0, s.kind === "pptx" ? 7 : 5).map((src, i) => (
+                  <a key={i} href="#" onClick={(e) => e.preventDefault()} style={{ display: "flex", gap: 9, padding: 9, borderRadius: "var(--r-sm)", background: "var(--elevated)", border: "1px solid var(--border)" }}>
+                    <span style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-2)", color: "var(--st-working)" }}><Icon name="globe" size={11} /></span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span className="mono" style={{ fontSize: 10.5, color: "var(--accent-2)" }}>{src.host}</span>
+                      <div style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{src.title}</div>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           </div>
         </div>

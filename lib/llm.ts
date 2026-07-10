@@ -57,7 +57,10 @@ async function callModel(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.2,
+        temperature: 0.7,
+        top_p: 0.95,
+        frequency_penalty: 0.5,
+        presence_penalty: 0.3,
         response_format: { type: "json_object" },
       }),
     });

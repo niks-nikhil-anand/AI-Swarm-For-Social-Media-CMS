@@ -25,13 +25,13 @@ const STAGES: Stage[] = [
 const STAGE_STATUS: Record<string, string> = { define: "drafting", roles: "awaiting", run: "running", output: "complete" };
 const SIDEBAR_ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
 const DEFAULT_BRIEF: ProjectBrief = {
-  goal: "Research the impact of quantum computing on cryptography and produce a 10-slide PowerPoint for a security leadership audience.",
+  goal: "",
   format: "pptx",
-  tone: "Executive",
-  length: "10 slides",
-  audience: "CISO, security leadership, board",
-  sources: "NIST, NCSC",
-  instructions: "Prefer probability framing over fixed dates. Cite every quantitative claim.",
+  tone: "",
+  length: "",
+  audience: "",
+  sources: "",
+  instructions: "",
 };
 
 function titleFromGoal(goal: string): string {
