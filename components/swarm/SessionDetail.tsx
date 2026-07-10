@@ -2,7 +2,7 @@
 /* ============================================================
    SWARM — Session detail (open a project, see its output)
    ============================================================ */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Icon, Btn, IconBtn, Badge, Card, Ring, StatusDot } from "./ui";
 import { Slide } from "./Output";
 import { type Project } from "./data";
@@ -118,6 +118,7 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
   const [slides, setSlides] = useState<any[]>([]);
   const [sources, setSources] = useState<any[]>([]);
   const [notFound, setNotFound] = useState(false);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   // Fetch real project data from the database
   useEffect(() => {
@@ -186,12 +187,17 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
           : <>
               <IconBtn name="duplicate" title="Clone & re-run" onClick={onRerun} />
               <IconBtn name="trash" title="Delete" />
-              {!failed && <Btn kind="primary" icon="download">Download</Btn>}
+              {!failed && (
+                <>
+                  <Btn kind="primary" icon="eye" onClick={() => outputRef.current?.scrollIntoView({ behavior: "smooth" })}>View output</Btn>
+                  <Btn kind="secondary" icon="download">Download</Btn>
+                </>
+              )}
             </>}
       </div>
 
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, overflow: "auto", background: "var(--bg-2)" }}>
+        <div ref={outputRef} style={{ flex: 1, minWidth: 0, overflow: "auto", background: "var(--bg-2)" }}>
           {running ? (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
               <Card style={{ maxWidth: 460, textAlign: "center", padding: 30 }}>
