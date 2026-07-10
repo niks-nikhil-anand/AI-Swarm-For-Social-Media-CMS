@@ -4,7 +4,8 @@
    ============================================================ */
 import { useState, useEffect, type CSSProperties } from "react";
 import { Icon, Btn, IconBtn, Badge, Card, Ring, SwarmMark, Segmented } from "./ui";
-import { SLIDES, SOURCES, type Slide as SlideT } from "./data";
+import { type Slide as SlideT } from "./data";
+import { DEMO_SLIDES, DEMO_SOURCES } from "./demoData";
 
 /* ---- mini charts (rendered inside slides) ---- */
 function ChartDist({ accent = "var(--accent)" }: { accent?: string }) {
@@ -174,12 +175,12 @@ export function Output({ onRerun }: { onRerun: () => void }) {
     </div>
   );
 
-  const cur = SLIDES[idx];
+  const cur = DEMO_SLIDES[idx];
   return (
     <div style={{ height: "100%", display: "flex", minHeight: 0 }}>
       {view === "slides" && (
         <div style={{ width: 168, flexShrink: 0, borderRight: "1px solid var(--border)", overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10, background: "var(--bg-2)" }}>
-          {SLIDES.map((s, i) => (
+          {DEMO_SLIDES.map((s, i) => (
             <button key={s.n} onClick={() => setIdx(i)} style={{ border: "none", background: "none", cursor: "pointer", padding: 0, position: "relative", borderRadius: "var(--r-sm)", outline: i === idx ? "2px solid var(--accent)" : "1px solid var(--border)", outlineOffset: i === idx ? 0 : -1 }}>
               <Slide s={s} scale={0.28} />
               <span style={{ position: "absolute", top: 4, left: 5, fontFamily: "var(--mono)", fontSize: 9, color: "rgba(255,255,255,0.5)", background: "rgba(0,0,0,0.4)", padding: "1px 4px", borderRadius: 3 }}>{s.n}</span>
@@ -192,7 +193,7 @@ export function Output({ onRerun }: { onRerun: () => void }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <Badge tone="success" icon="check-circle-fill">Generated</Badge>
           <span style={{ fontSize: 13, fontWeight: 600 }}>quantum-cryptography-impact.pptx</span>
-          <span className="faint" style={{ fontSize: 12 }}>· 10 slides · 1.8 MB</span>
+          <span className="faint" style={{ fontSize: 12 }}>· {DEMO_SLIDES.length} slides · 1.8 MB</span>
           <div style={{ flex: 1 }} />
           <Segmented<"slides" | "grid"> size="sm" options={[{ value: "slides", label: "Viewer", icon: "eye" }, { value: "grid", label: "Grid", icon: "grid" }]} value={view} onChange={setView} />
         </div>
@@ -202,14 +203,14 @@ export function Output({ onRerun }: { onRerun: () => void }) {
             <div style={{ width: "100%", maxWidth: 720 }}><Slide s={cur} scale={0.72} /></div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <IconBtn name="chevron-left" title="Previous" onClick={() => setIdx((i) => Math.max(0, i - 1))} />
-              <span className="mono" style={{ fontSize: 13, color: "var(--muted)", minWidth: 64, textAlign: "center" }}>{String(idx + 1).padStart(2, "0")} / 10</span>
-              <IconBtn name="chevron-right" title="Next" onClick={() => setIdx((i) => Math.min(SLIDES.length - 1, i + 1))} />
+              <span className="mono" style={{ fontSize: 13, color: "var(--muted)", minWidth: 64, textAlign: "center" }}>{String(idx + 1).padStart(2, "0")} / {DEMO_SLIDES.length}</span>
+              <IconBtn name="chevron-right" title="Next" onClick={() => setIdx((i) => Math.min(DEMO_SLIDES.length - 1, i + 1))} />
             </div>
           </div>
         ) : (
           <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16, maxWidth: 1000, margin: "0 auto" }}>
-              {SLIDES.map((s, i) => (
+              {DEMO_SLIDES.map((s, i) => (
                 <button key={s.n} onClick={() => { setIdx(i); setView("slides"); }} style={{ border: "none", background: "none", padding: 0, cursor: "pointer" }}><Slide s={s} scale={0.42} /></button>
               ))}
             </div>
@@ -239,10 +240,10 @@ export function Output({ onRerun }: { onRerun: () => void }) {
         <div style={{ padding: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <span className="eyebrow">Cited sources</span>
-            <Badge tone="neutral">{SOURCES.length}</Badge>
+            <Badge tone="neutral">{DEMO_SOURCES.length}</Badge>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {SOURCES.map((src, i) => (
+            {DEMO_SOURCES.map((src, i) => (
               <a key={i} href="#" onClick={(e) => e.preventDefault()} style={{ display: "flex", gap: 10, padding: 10, borderRadius: "var(--r-sm)", background: "var(--elevated)", border: "1px solid var(--border)" }}>
                 <span style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-2)", color: "var(--st-working)" }}><Icon name="globe" size={12} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>

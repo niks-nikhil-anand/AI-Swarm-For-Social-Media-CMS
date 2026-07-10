@@ -133,6 +133,38 @@ export interface Usage {
   byAgent: { name: string; cost: number; color: string }[];
 }
 
+/* ---------- Default agent roster (used by Roles UI) ---------- */
+export const AGENTS: Agent[] = [
+  { id: "lead", name: "Lead Researcher", short: "Lead", icon: "target", accent: "var(--purple)",
+    role: "Orchestrator",
+    why: "Decomposes the goal into research threads, assigns scope to each agent, and arbitrates conflicts.",
+    deps: [], layer: 0 },
+  { id: "web", name: "Web Researcher", short: "Web", icon: "globe", accent: "var(--blue)",
+    role: "Primary research",
+    why: "Runs live web searches across sources; harvests primary material into the workspace.",
+    deps: ["lead"], layer: 1 },
+  { id: "data", name: "Data Analyst", short: "Data", icon: "bar-chart", accent: "var(--cyan)",
+    role: "Quantitative",
+    why: "Extracts figures, timelines, and metrics; builds visualization-ready datasets.",
+    deps: ["lead", "web"], layer: 2 },
+  { id: "fact", name: "Fact-Checker", short: "Fact", icon: "shield", accent: "var(--st-done)",
+    role: "Verification",
+    why: "Cross-checks claims against independent sources and flags anything unverifiable.",
+    deps: ["web"], layer: 2 },
+  { id: "writer", name: "Content Writer", short: "Writer", icon: "edit", accent: "var(--blue)",
+    role: "Narrative",
+    why: "Turns verified findings into a tight, executive-ready narrative arc.",
+    deps: ["fact", "data"], layer: 3 },
+  { id: "designer", name: "Presentation Designer", short: "Design", icon: "layers", accent: "var(--purple)",
+    role: "Layout",
+    why: "Lays narrative onto branded templates, places charts, and enforces visual rhythm.",
+    deps: ["writer"], layer: 4 },
+  { id: "synth", name: "Synthesis Agent", short: "Synth", icon: "wand", accent: "var(--accent)",
+    role: "Assembly",
+    why: "Compiles artifacts into the final output with citations and metadata.",
+    deps: ["designer", "fact"], layer: 5 },
+];
+
 /* ---------- Model providers (Settings) ---------- */
 export interface ModelOption {
   id: string;

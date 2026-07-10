@@ -7,7 +7,8 @@ import { Icon, Btn, IconBtn, Badge, Ring, Bar, StatusPill, StatusDot, Segmented,
 import { AgentGraph } from "./Graph";
 import { SearchPanel } from "./SearchPanel";
 import { TemporalMonitor } from "./TemporalMonitor";
-import { AGENTS, TIMELINE, WORKSPACE, type Agent, type AgentStatus, type TimelineEvent } from "./data";
+import { AGENTS, type Agent, type AgentStatus, type TimelineEvent } from "./data";
+import { DEMO_TIMELINE as TIMELINE, DEMO_WORKSPACE as WORKSPACE } from "./demoData";
 
 type RunLayout = "split" | "graph" | "logs";
 type GraphLayout = "layered" | "vertical" | "radial";

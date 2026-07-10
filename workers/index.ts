@@ -45,9 +45,6 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
-
-  console.log("Research worker started on task queue: research");
-  await worker.run();
 }
 
 main().catch((err) => {
