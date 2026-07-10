@@ -190,7 +190,7 @@ export default function SwarmApp() {
   }
   function onComplete() {
     reach("output"); go("output");
-    pushToast({ icon: "check-circle-fill", tone: "success", title: "Deck ready", body: "quantum-cryptography-impact.pptx · 10 slides." });
+    pushToast({ icon: "check-circle-fill", tone: "success", title: "Deck ready", body: `${PROJECT_TITLE} is ready to view.` });
     if (projectId) {
       fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
@@ -237,7 +237,7 @@ export default function SwarmApp() {
           {screen === "define" && <Define onPropose={onPropose} />}
           {screen === "roles" && <Roles onLaunch={onLaunch} />}
           {screen === "run" && <Run onComplete={onComplete} runLayout={runLayout} setRunLayout={setRunLayout} graphLayout={graphLayout} setGraphLayout={setGraphLayout} motion={t.motion} projectId={projectId} />}
-          {screen === "output" && <Output onRerun={onRerun} />}
+          {screen === "output" && <Output onRerun={onRerun} projectId={projectId} />}
         </div>
       </main>
 
