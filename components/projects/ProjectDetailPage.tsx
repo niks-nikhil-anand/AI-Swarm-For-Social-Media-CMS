@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { Badge, Btn, Card, Icon, IconBtn, StatusDot } from "../swarm/ui";
 import { Sidebar, TopBar } from "../swarm/Shell";
 import { AgentGraph } from "../swarm/Graph";
-import type { Agent, AgentStatus } from "../swarm/data";
+import { Slide } from "../swarm/Output";
+import type { Agent, AgentStatus, Slide as SlideT } from "../swarm/data";
 
 type ProjectStatus = "Draft" | "Running" | "Complete" | "Failed";
-type Tab = "overview" | "replay" | "agents" | "activity" | "sources";
+type Tab = "overview" | "replay" | "agents" | "activity" | "sources" | "slides";
 
 interface AgentRecord {
   id: string; slug: string; name: string; short: string; icon: string; accent: string;
@@ -168,6 +169,12 @@ export default function ProjectDetailPage({ projectId }: { projectId: string }) 
 
   const replay = <ReplayPanel project={project} />;
 
+  const slides = project.slides && project.slides.length > 0 ? (
+    <SlidesViewer slides={project.slides as SlideT[]} />
+  ) : (
+    <EmptyTab icon="layers" title="No slides generated" body="Slides will appear here after the Presentation Designer finishes." />
+  );
+
   return shell(
     <>
       <div style={{ padding: "16px 22px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -180,13 +187,18 @@ export default function ProjectDetailPage({ projectId }: { projectId: string }) 
         {project.status === "Running" && <Btn kind="primary" icon="activity" onClick={() => router.push("/")}>Open live run</Btn>}
         {project.status !== "Running" && project.timeline.length > 0 && <Btn kind="secondary" icon="play" onClick={() => setTab("replay")}>Replay run</Btn>}
         {project.status === "Failed" && <Btn kind="primary" icon="reload" onClick={() => router.push("/")}>Retry from setup</Btn>}
-        {project.status === "Complete" && <Btn kind="secondary" icon="duplicate" onClick={() => router.push("/")}>Clone &amp; rerun</Btn>}
+        {project.status === "Complete" && (
+          <>
+            <Btn kind="primary" icon="eye" onClick={() => setTab("slides")}>View output</Btn>
+            <Btn kind="secondary" icon="duplicate" onClick={() => router.push("/")}>Clone &amp; rerun</Btn>
+          </>
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
         <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: "24px" }}>
           <div style={{ maxWidth: 980, margin: "0 auto" }}>
-            <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "1px solid var(--border)" }}>{(["overview", "replay", "agents", "activity", "sources"] as Tab[]).map((value) => <button key={value} onClick={() => setTab(value)} style={{ padding: "10px 14px", border: "none", borderBottom: tab === value ? "2px solid var(--accent)" : "2px solid transparent", background: "transparent", color: tab === value ? "var(--text)" : "var(--muted)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{value}{value === "agents" ? ` (${project.agents.length})` : value === "activity" ? ` (${project.timeline.length})` : value === "sources" ? ` (${project.searchResults.length})` : ""}</button>)}</div>
-            {tab === "overview" ? overview : tab === "replay" ? replay : tab === "agents" ? agents : tab === "activity" ? activity : sources}
+            <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "1px solid var(--border)" }}>{(["overview", "slides", "replay", "agents", "activity", "sources"] as Tab[]).map((value) => <button key={value} onClick={() => setTab(value)} style={{ padding: "10px 14px", border: "none", borderBottom: tab === value ? "2px solid var(--accent)" : "2px solid transparent", background: "transparent", color: tab === value ? "var(--text)" : "var(--muted)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{value}{value === "agents" ? ` (${project.agents.length})` : value === "activity" ? ` (${project.timeline.length})` : value === "sources" ? ` (${project.searchResults.length})` : value === "slides" ? ` (${project.slides?.length || 0})` : ""}</button>)}</div>
+            {tab === "overview" ? overview : tab === "slides" ? slides : tab === "replay" ? replay : tab === "agents" ? agents : tab === "activity" ? activity : sources}
           </div>
         </div>
         <aside style={{ width: 300, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", overflow: "auto", padding: 20 }}>
@@ -306,4 +318,24 @@ function ReplayEvent({ event, startMs }: { event: TimelineRecord; startMs: numbe
   const meta = EVENT_META[event.type] || EVENT_META.System;
   const elapsed = Math.max(0, (new Date(event.createdAt).getTime() - startMs) / 1000);
   return <div style={{ display: "flex", gap: 10, padding: "11px 14px", borderBottom: "1px solid var(--border-soft)" }}><span style={{ width: 25, height: 25, borderRadius: 7, display: "grid", placeItems: "center", background: "var(--elevated)", color: meta.color, flexShrink: 0 }}><Icon name={meta.icon} size={12} /></span><div style={{ minWidth: 0, flex: 1 }}><div style={{ display: "flex", gap: 7, alignItems: "center" }}><span style={{ fontSize: 11.5, fontWeight: 600, color: event.agent?.accent || "var(--text-2)" }}>{event.agent?.name || "System"}</span><span className="mono faint" style={{ fontSize: 9.5, marginLeft: "auto" }}>+{replayTime(elapsed)}</span></div><p style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45, marginTop: 4 }}>{event.text}</p></div></div>;
+}
+
+function SlidesViewer({ slides }: { slides: SlideT[] }) {
+  const [idx, setIdx] = useState(0);
+  const slide = slides[idx];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+      <Card style={{ width: "100%", padding: 0, overflow: "hidden" }}>
+        <div style={{ background: "var(--bg-2)", padding: "24px", display: "flex", justifyContent: "center", minHeight: 500 }}>
+          {slide ? <Slide s={slide} scale={0.68} /> : <div className="muted">No slide available</div>}
+        </div>
+      </Card>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", justifyContent: "center" }}>
+        <Btn kind="secondary" size="sm" icon="chevron-left" onClick={() => setIdx(Math.max(0, idx - 1))} disabled={idx === 0} />
+        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 80, textAlign: "center" }}>Slide {idx + 1} of {slides.length}</span>
+        <Btn kind="secondary" size="sm" icon="chevron-right" onClick={() => setIdx(Math.min(slides.length - 1, idx + 1))} disabled={idx === slides.length - 1} />
+      </div>
+    </div>
+  );
 }
