@@ -161,6 +161,52 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentOutput> {
   }
 }
 
+const VALID_SLIDE_KINDS = new Set(["Title", "Stat", "Bullets", "Chart", "Close"]);
+const VALID_CHART_KINDS = new Set(["Dist", "Line", "Bars"]);
+
+function capitalize(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+// Persist the Presentation Designer's slide architecture into the Slide
+// table, so the Output UI can render the real deck instead of nothing.
+export async function saveDeck(input: {
+  projectId: string;
+  deck: Record<string, unknown>;
+}): Promise<number> {
+  const { projectId, deck } = input;
+  const rawSlides = Array.isArray(deck.slides) ? deck.slides : [];
+  if (rawSlides.length === 0) return 0;
+
+  const rows = rawSlides.map((raw, i) => {
+    const s = raw as Record<string, unknown>;
+    const kind = capitalize(s.kind);
+    const chart = capitalize(s.chart);
+    const bullets = Array.isArray(s.bullets) ? s.bullets.filter((b) => typeof b === "string") : [];
+    return {
+      projectId,
+      n: typeof s.n === "number" ? s.n : i + 1,
+      kind: (VALID_SLIDE_KINDS.has(kind ?? "") ? kind : "Bullets") as "Title" | "Stat" | "Bullets" | "Chart" | "Close",
+      title: typeof s.title === "string" ? s.title.slice(0, 200) : `Slide ${i + 1}`,
+      sub: typeof s.keyMessage === "string" ? s.keyMessage.slice(0, 300) : null,
+      footer: typeof deck.deckTitle === "string" ? deck.deckTitle.slice(0, 200) : null,
+      stat: typeof s.stat === "string" ? s.stat.slice(0, 100) : null,
+      statSub: typeof s.statSub === "string" ? s.statSub.slice(0, 200) : null,
+      body: typeof s.keyMessage === "string" ? s.keyMessage.slice(0, 500) : null,
+      bullets,
+      chart: VALID_CHART_KINDS.has(chart ?? "") ? (chart as "Dist" | "Line" | "Bars") : null,
+    };
+  });
+
+  await prisma.$transaction([
+    prisma.slide.deleteMany({ where: { projectId } }),
+    prisma.slide.createMany({ data: rows }),
+  ]);
+
+  return rows.length;
+}
+
 export async function recordEvidence(input: {
   projectId: string;
   agentId: string;
