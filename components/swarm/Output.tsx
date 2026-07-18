@@ -4,8 +4,9 @@
    ============================================================ */
 import { useState, useEffect, type CSSProperties } from "react";
 import { Icon, Btn, IconBtn, Badge, Card, Ring, SwarmMark, Segmented } from "./ui";
-import { type Slide as SlideT, type Source } from "./data";
+import { type Slide as SlideT, type Source, type DocSection, type DocReference } from "./data";
 import { DEMO_SLIDES, DEMO_SOURCES } from "./demoData";
+import { DocumentViewer } from "./DocumentViewer";
 
 interface FetchedProject {
   title: string;
@@ -16,8 +17,24 @@ interface FetchedProject {
   durationSeconds: number | null;
   wordCount: number | null;
   slides: SlideT[];
+  sections: DocSection[];
+  references: DocReference[];
   searchResults: { id: string; title: string; url: string }[];
 }
+
+const FORMAT_META: Record<string, { label: string; ext: string }> = {
+  pptx: { label: "PPTX · 16:9", ext: "pptx" },
+  deck: { label: "PPTX · 16:9", ext: "pptx" },
+  pdf: { label: "PDF Report", ext: "pdf" },
+  docx: { label: "Word Document", ext: "docx" },
+  blog: { label: "Blog Post", ext: "md" },
+  md: { label: "Markdown", ext: "md" },
+  markdown: { label: "Markdown", ext: "md" },
+  exec: { label: "Executive Summary", ext: "pdf" },
+  summary: { label: "Executive Summary", ext: "pdf" },
+  repo: { label: "Code Repo", ext: "zip" },
+};
+const DECK_FORMATS = new Set(["pptx", "deck"]);
 
 function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
@@ -217,8 +234,14 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
 
   // No projectId → dev/Storybook preview of the UI with demo content.
   const isLive = !!projectId;
+  const format = isLive ? (project?.format ?? "pptx") : "pptx";
+  const isDeck = DECK_FORMATS.has(format);
+  const meta = FORMAT_META[format] ?? { label: format.toUpperCase(), ext: "txt" };
   const slides = isLive ? (project?.slides ?? []) : DEMO_SLIDES;
+  const sections = isLive ? (project?.sections ?? []) : [];
+  const references = isLive ? (project?.references ?? []) : [];
   const sources = isLive ? sourcesFromSearchResults(project?.searchResults ?? []) : DEMO_SOURCES;
+  const contentCount = isDeck ? slides.length : sections.length;
   const genState: "generating" | "done" | "failed" | "empty" = !isLive
     ? "done"
     : notFound
@@ -229,7 +252,7 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
     ? "generating"
     : project.status === "Failed"
     ? "failed"
-    : slides.length === 0
+    : contentCount === 0
     ? "empty"
     : "done";
 
@@ -239,7 +262,7 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
       <Card style={{ maxWidth: 420, textAlign: "center", padding: 30 }}>
         <div style={{ width: 52, height: 52, borderRadius: "var(--r-lg)", background: "var(--st-error-soft)", color: "var(--st-error)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}><Icon name="alert-circle" size={24} /></div>
         <h3 className="h3">Synthesis failed</h3>
-        <p className="muted" style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5 }}>The Synthesis Agent couldn&apos;t render the deck. Findings are preserved in the workspace.</p>
+        <p className="muted" style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5 }}>The Synthesis Agent couldn&apos;t assemble the deliverable. Findings are preserved in the workspace.</p>
         <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 20 }}>
           <Btn kind="secondary" icon="folder">Open workspace</Btn>
           <Btn kind="primary" icon="reload" onClick={onRerun}>Retry synthesis</Btn>
@@ -250,22 +273,23 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
   if (genState === "empty") return (
     <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <Card style={{ maxWidth: 420, textAlign: "center", padding: 30 }}>
-        <h3 className="h3">No slides were generated</h3>
-        <p className="muted" style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5 }}>The run completed but the Presentation Designer didn&apos;t return a deck.</p>
+        <h3 className="h3">{isDeck ? "No slides were generated" : "No content was generated"}</h3>
+        <p className="muted" style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5 }}>The run completed but the {isDeck ? "Presentation Designer didn't return a deck" : "Synthesis Agent didn't return a deliverable"}.</p>
         <div style={{ marginTop: 20 }}><Btn kind="primary" icon="reload" onClick={onRerun}>Re-run</Btn></div>
       </Card>
     </div>
   );
 
   const cur = slides[idx];
-  const fileName = isLive && project ? `${project.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}.pptx` : "quantum-cryptography-impact.pptx";
+  const fileBase = isLive && project ? project.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60) : "quantum-cryptography-impact";
+  const fileName = `${fileBase}.${meta.ext}`;
   const agentsCount = isLive && project ? project.agents.length : 7;
   const runTime = isLive && project ? fmtRunTime(project.durationSeconds) : "3:04";
   const words = isLive && project ? (project.wordCount ?? 0).toLocaleString() : "1,240";
 
   return (
     <div style={{ height: "100%", display: "flex", minHeight: 0 }}>
-      {view === "slides" && (
+      {isDeck && view === "slides" && (
         <div style={{ width: 168, flexShrink: 0, borderRight: "1px solid var(--border)", overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10, background: "var(--bg-2)" }}>
           {slides.map((s, i) => (
             <button key={s.n} onClick={() => setIdx(i)} style={{ border: "none", background: "none", cursor: "pointer", padding: 0, position: "relative", borderRadius: "var(--r-sm)", outline: i === idx ? "2px solid var(--accent)" : "1px solid var(--border)", outlineOffset: i === idx ? 0 : -1 }}>
@@ -280,12 +304,14 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <Badge tone="success" icon="check-circle-fill">Generated</Badge>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{fileName}</span>
-          <span className="faint" style={{ fontSize: 12 }}>· {slides.length} slides</span>
+          <span className="faint" style={{ fontSize: 12 }}>· {contentCount} {isDeck ? "slides" : "sections"}</span>
           <div style={{ flex: 1 }} />
-          <Segmented<"slides" | "grid"> size="sm" options={[{ value: "slides", label: "Viewer", icon: "eye" }, { value: "grid", label: "Grid", icon: "grid" }]} value={view} onChange={setView} />
+          {isDeck && <Segmented<"slides" | "grid"> size="sm" options={[{ value: "slides", label: "Viewer", icon: "eye" }, { value: "grid", label: "Grid", icon: "grid" }]} value={view} onChange={setView} />}
         </div>
 
-        {view === "slides" ? (
+        {!isDeck ? (
+          <DocumentViewer title={(isLive && project?.title) || "Untitled"} sections={sections} references={references} />
+        ) : view === "slides" ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 32px", minHeight: 0, gap: 16 }}>
             <div style={{ width: "100%", maxWidth: 720 }}>{cur && <Slide s={cur} scale={0.72} />}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -307,7 +333,7 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
 
       <div style={{ width: 320, flexShrink: 0, borderLeft: "1px solid var(--border)", overflow: "auto", background: "var(--surface)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
-          <Btn kind="primary" icon="download" full>Download .pptx</Btn>
+          <Btn kind="primary" icon="download" full>Download .{meta.ext}</Btn>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn kind="secondary" icon="reload" onClick={onRerun} style={{ flex: 1 }}>Re-run</Btn>
             <Btn kind="secondary" icon="link" style={{ flex: 1 }}>Share</Btn>
@@ -318,7 +344,7 @@ export function Output({ onRerun, projectId }: { onRerun: () => void; projectId?
         <div style={{ padding: "0 18px 18px", borderBottom: "1px solid var(--border)" }}>
           <div className="eyebrow" style={{ marginBottom: 10 }}>Generation summary</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            {([["Format", "PPTX · 16:9"], ["Slides", String(slides.length)], ["Agents", String(agentsCount)], ["Sources", String(sources.length)], ["Run time", runTime], ["Words", words]] as [string, string][]).map(([k, v]) => (
+            {([["Format", meta.label], [isDeck ? "Slides" : "Sections", String(contentCount)], ["Agents", String(agentsCount)], ["Sources", String(sources.length)], ["Run time", runTime], ["Words", words]] as [string, string][]).map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12.5 }}><span className="muted" style={{ whiteSpace: "nowrap" }}>{k}</span><span className="mono" style={{ color: "var(--text)", whiteSpace: "nowrap" }}>{v}</span></div>
             ))}
           </div>

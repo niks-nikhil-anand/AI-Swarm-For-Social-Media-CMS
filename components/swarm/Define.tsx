@@ -170,13 +170,13 @@ function AdvancedDrawer({
             <Segmented options={["6 slides", "10 slides", "16 slides"]} value={length} onChange={setLength} size="sm" />
           </Field>
           <Field label="Target audience" hint="Who will read or present this output">
-            <AdvInput value={audience} onChange={(event) => setAudience(event.target.value)} />
+            <AdvInput value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="e.g. CISO, security leadership, board" />
           </Field>
           <Field label="Must-include sources" hint="Comma separated domains">
-            <AdvInput value={sources} onChange={(event) => setSources(event.target.value)} placeholder="nist.gov, ncsc.gov.uk" />
+            <AdvInput value={sources} onChange={(event) => setSources(event.target.value)} placeholder="e.g. nist.gov, ncsc.gov.uk" />
           </Field>
           <Field label="Custom instructions">
-            <AdvTextarea rows={4} value={instructions} onChange={(event) => setInstructions(event.target.value)} />
+            <AdvTextarea rows={4} value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="e.g. Prefer probability framing over fixed dates. Cite every quantitative claim." />
           </Field>
         </div>
 
@@ -200,14 +200,14 @@ export interface ProjectBrief {
 }
 
 export function Define({ onPropose }: { onPropose: (brief: ProjectBrief) => void }) {
-  const [topic, setTopic] = useState("Research the impact of quantum computing on cryptography and produce a 10-slide PowerPoint for a security leadership audience.");
+  const [topic, setTopic] = useState("");
   const [fmt, setFmt] = useState("pptx");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tone, setTone] = useState("Executive");
   const [length, setLength] = useState("10 slides");
-  const [audience, setAudience] = useState("CISO, security leadership, board");
-  const [sources, setSources] = useState("NIST, NCSC");
-  const [instructions, setInstructions] = useState("Prefer probability framing over fixed dates. Cite every quantitative claim.");
+  const [audience, setAudience] = useState("");
+  const [sources, setSources] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [focused, setFocused] = useState(false);
   const [advHover, setAdvHover] = useState(false);
   const valid = topic.trim().length > 12;

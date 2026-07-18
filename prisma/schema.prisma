@@ -163,6 +163,8 @@ model Project {
   agents          ProjectAgent[]
   timelineEvents  TimelineEvent[]
   slides          Slide[]
+  sections        Section[]
+  references      Reference[]
   sources         Source[]
   searchResults   SearchResult[]
   evidence        Evidence[]
@@ -240,6 +242,38 @@ model Slide {
 
   @@index([projectId])
   @@unique([projectId, n])
+}
+
+// A section of the written deliverable (Output stage, document formats:
+// pdf/docx/blog/md/exec). Populated from the Synthesis Agent's output.
+model Section {
+  id           String   @id @default(cuid())
+  projectId    String
+  n            Int
+  heading      String
+  body         String   @db.Text
+  keyTakeaway  String?
+  citations    String[]
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([projectId, n])
+}
+
+// A citation reference (e.g. "ref-1") resolved by the Synthesis Agent,
+// linked from Section.citations markers.
+model Reference {
+  id        String @id @default(cuid())
+  projectId String
+  refId     String
+  url       String @db.VarChar(2048)
+  title     String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([projectId, refId])
 }
 
 // A stored SearXNG search result for a project (research evidence trail).

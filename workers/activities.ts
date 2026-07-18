@@ -207,6 +207,76 @@ export async function saveDeck(input: {
   return rows.length;
 }
 
+// Persist the Synthesis Agent's final written deliverable into Section /
+// Reference tables, so document-format outputs (pdf/docx/blog/md/exec) show
+// the real report instead of nothing.
+export async function saveDocument(input: {
+  projectId: string;
+  final: Record<string, unknown>;
+}): Promise<number> {
+  const { projectId, final } = input;
+  const deliverable = (final.deliverable ?? {}) as Record<string, unknown>;
+  const rawSections = Array.isArray(deliverable.sections) ? deliverable.sections : [];
+  const rawReferences = Array.isArray(final.references) ? final.references : [];
+
+  const sectionRows = rawSections.map((raw, i) => {
+    const s = raw as Record<string, unknown>;
+    return {
+      projectId,
+      n: i + 1,
+      heading: typeof s.heading === "string" ? s.heading.slice(0, 200) : `Section ${i + 1}`,
+      body: typeof s.body === "string" ? s.body : "",
+      keyTakeaway: typeof s.keyTakeaway === "string" ? s.keyTakeaway.slice(0, 300) : null,
+      citations: Array.isArray(s.citations) ? s.citations.filter((c) => typeof c === "string") : [],
+    };
+  });
+
+  let referenceRows = rawReferences
+    .map((raw) => {
+      const r = raw as Record<string, unknown>;
+      if (typeof r.url !== "string") return null;
+      return {
+        projectId,
+        refId: typeof r.id === "string" ? r.id : r.url.slice(0, 100),
+        url: r.url.slice(0, 2048),
+        title: typeof r.title === "string" ? r.title.slice(0, 300) : r.url,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  // Some models skip the top-level `references[]` contract and instead put
+  // raw URLs directly in each section's `citations[]`. Synthesize a
+  // reference list from those so the deliverable still has a sources list,
+  // enriching titles from the researcher's own search results when we can.
+  if (referenceRows.length === 0) {
+    const urlCitations = Array.from(
+      new Set(sectionRows.flatMap((s) => s.citations).filter((c) => /^https?:\/\//i.test(c)))
+    );
+    if (urlCitations.length > 0) {
+      const matches = await prisma.searchResult.findMany({
+        where: { projectId, url: { in: urlCitations } },
+        select: { url: true, title: true },
+      });
+      const titleByUrl = new Map(matches.map((m) => [m.url, m.title]));
+      referenceRows = urlCitations.map((url) => ({
+        projectId,
+        refId: url.slice(0, 100),
+        url: url.slice(0, 2048),
+        title: titleByUrl.get(url) ?? url,
+      }));
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.section.deleteMany({ where: { projectId } }),
+    prisma.reference.deleteMany({ where: { projectId } }),
+    ...(sectionRows.length ? [prisma.section.createMany({ data: sectionRows })] : []),
+    ...(referenceRows.length ? [prisma.reference.createMany({ data: referenceRows, skipDuplicates: true })] : []),
+  ]);
+
+  return sectionRows.length;
+}
+
 export async function recordEvidence(input: {
   projectId: string;
   agentId: string;

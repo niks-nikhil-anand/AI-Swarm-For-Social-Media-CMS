@@ -6,10 +6,12 @@ import { Badge, Btn, Card, Icon, IconBtn, StatusDot } from "../swarm/ui";
 import { Sidebar, TopBar } from "../swarm/Shell";
 import { AgentGraph } from "../swarm/Graph";
 import { Slide } from "../swarm/Output";
-import type { Agent, AgentStatus, Slide as SlideT } from "../swarm/data";
+import { DocumentViewer } from "../swarm/DocumentViewer";
+import type { Agent, AgentStatus, Slide as SlideT, DocSection, DocReference } from "../swarm/data";
 
 type ProjectStatus = "Draft" | "Running" | "Complete" | "Failed";
-type Tab = "overview" | "replay" | "agents" | "activity" | "sources" | "slides";
+type Tab = "overview" | "replay" | "agents" | "activity" | "sources" | "output";
+const DECK_FORMATS = new Set(["pptx", "deck"]);
 
 interface AgentRecord {
   id: string; slug: string; name: string; short: string; icon: string; accent: string;
@@ -33,12 +35,13 @@ interface ProjectDetail {
   tokensIn: number; tokensOut: number; searches: number; durationSeconds: number | null;
   wordCount: number | null; summary: string | null; createdAt: string; completedAt: string | null;
   agents: AgentRecord[]; sources: { id: string; host: string; title: string; by: string; verified: boolean }[];
-  slides: { id: string; n: number; title: string; sub: string | null; kind: string }[];
+  slides: SlideT[];
+  sections: DocSection[]; references: DocReference[];
   timeline: TimelineRecord[]; searchResults: SearchRecord[]; evidence: EvidenceRecord[];
 }
 
 const ROUTES: Record<string, string> = { settings: "/settings", dashboard: "/dashboard", history: "/projects", skills: "/skills" };
-const FORMAT_LABELS: Record<string, string> = { deck: "PowerPoint", pptx: "PowerPoint", pdf: "PDF report", docx: "Word document", blog: "Blog post", markdown: "Markdown", summary: "Executive summary" };
+const FORMAT_LABELS: Record<string, string> = { deck: "PowerPoint", pptx: "PowerPoint", pdf: "PDF report", docx: "Word document", blog: "Blog post", markdown: "Markdown", md: "Markdown", summary: "Executive summary", exec: "Executive Summary", repo: "Code Repo" };
 const STATUS: Record<ProjectStatus, { label: string; dot: string; color: string }> = {
   Draft: { label: "Draft", dot: "idle", color: "var(--muted)" },
   Running: { label: "Running", dot: "working", color: "var(--st-working)" },
@@ -169,10 +172,19 @@ export default function ProjectDetailPage({ projectId }: { projectId: string }) 
 
   const replay = <ReplayPanel project={project} />;
 
-  const slides = project.slides && project.slides.length > 0 ? (
-    <SlidesViewer slides={project.slides as SlideT[]} />
+  const isDeck = DECK_FORMATS.has(project.format);
+  const output = project.format === "repo" ? (
+    <EmptyTab icon="git-branch" title="Code repo generation isn't available yet" body="This format needs a dedicated build step that hasn't shipped. The written research is still available in Overview." />
+  ) : isDeck ? (
+    project.slides.length > 0 ? (
+      <SlidesViewer slides={project.slides} />
+    ) : (
+      <EmptyTab icon="layers" title="No slides generated" body="Slides will appear here after the Presentation Designer finishes." />
+    )
   ) : (
-    <EmptyTab icon="layers" title="No slides generated" body="Slides will appear here after the Presentation Designer finishes." />
+    <div style={{ height: 700, border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
+      <DocumentViewer title={project.title} sections={project.sections} references={project.references} />
+    </div>
   );
 
   return shell(
@@ -189,7 +201,7 @@ export default function ProjectDetailPage({ projectId }: { projectId: string }) 
         {project.status === "Failed" && <Btn kind="primary" icon="reload" onClick={() => router.push("/")}>Retry from setup</Btn>}
         {project.status === "Complete" && (
           <>
-            <Btn kind="primary" icon="eye" onClick={() => setTab("slides")}>View output</Btn>
+            <Btn kind="primary" icon="eye" onClick={() => setTab("output")}>View output</Btn>
             <Btn kind="secondary" icon="duplicate" onClick={() => router.push("/")}>Clone &amp; rerun</Btn>
           </>
         )}
@@ -197,8 +209,8 @@ export default function ProjectDetailPage({ projectId }: { projectId: string }) 
       <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
         <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: "24px" }}>
           <div style={{ maxWidth: 980, margin: "0 auto" }}>
-            <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "1px solid var(--border)" }}>{(["overview", "slides", "replay", "agents", "activity", "sources"] as Tab[]).map((value) => <button key={value} onClick={() => setTab(value)} style={{ padding: "10px 14px", border: "none", borderBottom: tab === value ? "2px solid var(--accent)" : "2px solid transparent", background: "transparent", color: tab === value ? "var(--text)" : "var(--muted)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{value}{value === "agents" ? ` (${project.agents.length})` : value === "activity" ? ` (${project.timeline.length})` : value === "sources" ? ` (${project.searchResults.length})` : value === "slides" ? ` (${project.slides?.length || 0})` : ""}</button>)}</div>
-            {tab === "overview" ? overview : tab === "slides" ? slides : tab === "replay" ? replay : tab === "agents" ? agents : tab === "activity" ? activity : sources}
+            <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "1px solid var(--border)" }}>{(["overview", "output", "replay", "agents", "activity", "sources"] as Tab[]).map((value) => <button key={value} onClick={() => setTab(value)} style={{ padding: "10px 14px", border: "none", borderBottom: tab === value ? "2px solid var(--accent)" : "2px solid transparent", background: "transparent", color: tab === value ? "var(--text)" : "var(--muted)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{value}{value === "agents" ? ` (${project.agents.length})` : value === "activity" ? ` (${project.timeline.length})` : value === "sources" ? ` (${project.searchResults.length})` : value === "output" ? ` (${isDeck ? project.slides.length : project.sections.length})` : ""}</button>)}</div>
+            {tab === "overview" ? overview : tab === "output" ? output : tab === "replay" ? replay : tab === "agents" ? agents : tab === "activity" ? activity : sources}
           </div>
         </div>
         <aside style={{ width: 300, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", overflow: "auto", padding: 20 }}>

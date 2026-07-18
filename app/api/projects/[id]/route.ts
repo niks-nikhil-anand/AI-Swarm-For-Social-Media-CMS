@@ -18,6 +18,8 @@ export async function GET(
       agents: { orderBy: { layer: "asc" } },
       sources: true,
       slides: { orderBy: { n: "asc" } },
+      sections: { orderBy: { n: "asc" } },
+      references: true,
       timelineEvents: {
         orderBy: { createdAt: "desc" },
         take: 200,
@@ -103,6 +105,12 @@ export async function GET(
       body: s.body,
       bullets: s.bullets,
       chart: s.chart ? s.chart.toLowerCase() : null,
+    })),
+    sections: project.sections.map((s) => ({
+      n: s.n, heading: s.heading, body: s.body, keyTakeaway: s.keyTakeaway, citations: s.citations,
+    })),
+    references: project.references.map((r) => ({
+      refId: r.refId, url: r.url, title: r.title,
     })),
     timeline: project.timelineEvents.map((event) => ({
       id: event.id,

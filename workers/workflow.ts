@@ -7,7 +7,7 @@
 import { proxyActivities } from "@temporalio/workflow";
 import type * as activities from "./activities";
 
-const { performSearch, runAgent, saveDeck, markProjectComplete } = proxyActivities<typeof activities>({
+const { performSearch, runAgent, saveDeck, saveDocument, markProjectComplete } = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   retry: {
     initialInterval: "2s",
@@ -137,6 +137,7 @@ export async function researchProjectWorkflow(
       stagesRun.push("synth");
       summary = typeof final.output.executiveSummary === "string" ? final.output.executiveSummary : undefined;
       wordCount = typeof final.output.wordCount === "number" ? final.output.wordCount : undefined;
+      await saveDocument({ projectId, final: final.output });
     }
 
     await markProjectComplete({ projectId, summary, wordCount });

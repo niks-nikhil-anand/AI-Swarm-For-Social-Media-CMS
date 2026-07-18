@@ -92,6 +92,22 @@ export interface Slide {
   chart?: "dist" | "line" | "bars";
 }
 
+/** A section of the written deliverable (pdf/docx/blog/md/exec output formats). */
+export interface DocSection {
+  n: number;
+  heading: string;
+  body: string;
+  keyTakeaway?: string | null;
+  citations: string[];
+}
+
+/** A citation reference resolved by the Synthesis Agent. */
+export interface DocReference {
+  refId: string;
+  url: string;
+  title: string;
+}
+
 export type ProjectStatus = "running" | "complete" | "failed";
 
 export interface Project {
