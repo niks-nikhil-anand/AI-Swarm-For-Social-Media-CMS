@@ -113,38 +113,76 @@ export default function LoginPage() {
     }
   }
   const field: CSSProperties = {
-    height: 44, width: "100%", padding: "0 14px", borderRadius: "var(--r-sm)",
-    background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)",
+    height: 46, width: "100%", padding: "0 14px", borderRadius: 10,
+    background: "color-mix(in oklab, var(--surface) 86%, #fff 4%)", border: "1px solid var(--border-strong)", color: "var(--text)",
     fontFamily: "var(--font)", fontSize: 14, outline: "none",
   };
   return (
-    <div style={{ position: "fixed", inset: 0, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+    <div className="login-shell">
       <SwarmBackdrop />
-      <div style={{ position: "absolute", top: "-20%", left: "50%", transform: "translateX(-50%)", width: 720, height: 720, borderRadius: "50%", background: "radial-gradient(circle, var(--accent-soft), transparent 62%)", filter: "blur(20px)", pointerEvents: "none" }} />
 
-      <div className="rise" style={{ position: "relative", width: 392, maxWidth: "92vw" }}>
-        <div className="glass-strong" style={{ borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--shadow-lg)" }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 26 }}>
-            <div style={{ width: 56, height: 56, borderRadius: "var(--r-lg)", background: "var(--elevated)", border: "1px solid var(--glass-border)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 24px -6px var(--accent-glow)" }}>
-              <SwarmMark size={32} />
+      <main className="login-frame rise">
+        <aside className="login-brand-panel">
+          <div className="login-brand-top">
+            <div className="login-brand-mark">
+              <SwarmMark size={30} />
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.5px" }}>Welcome to Swarm</div>
-              <p className="muted" style={{ fontSize: 13.5, marginTop: 4 }}>Set a goal. Approve a team. Watch it work.</p>
+            <div>
+              <div className="login-brand-name">Social Swarm</div>
+              <div className="login-brand-sub">AI publishing operations</div>
             </div>
           </div>
 
+          <div className="login-brand-copy">
+            <div className="login-kicker">Workspace command center</div>
+            <h1>Self Learning Social Swarm</h1>
+            <p>Turn live research into scheduled social content while keeping every post behind clear human approval gates.</p>
+          </div>
+
+          <div className="login-signal-stack" aria-hidden="true">
+            {[
+              ["Research scan", "27 signals", "working"],
+              ["Approval queue", "2 waiting", "blocked"],
+              ["Today plan", "1/3 ready", "done"],
+            ].map(([label, value, tone]) => (
+              <div className="login-signal" key={label}>
+                <span className={`login-signal-dot login-signal-${tone}`} />
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="login-brand-footer">
+            <span>Postiz</span>
+            <span>SearXNG</span>
+            <span>Temporal</span>
+          </div>
+        </aside>
+
+        <section className="login-card-panel">
+          <div className="login-card">
+            <div className="login-card-header">
+              <div className="login-card-icon">
+                <Icon name="lock" size={18} />
+              </div>
+              <div>
+                <div className="login-card-title">Sign in</div>
+                <p>Welcome back to Social Swarm.</p>
+              </div>
+            </div>
+
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
-              <label className="eyebrow" style={{ display: "block", marginBottom: 6, textTransform: "none", letterSpacing: 0, fontSize: 12.5, fontWeight: 600, color: "var(--text-2)" }}>Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} style={field} type="email" />
+              <label className="login-label">Email</label>
+              <input value={email} onChange={(e) => setEmail(e.target.value)} style={field} type="email" autoComplete="email" placeholder="you@company.com" />
             </div>
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <label className="eyebrow" style={{ textTransform: "none", letterSpacing: 0, fontSize: 12.5, fontWeight: 600, color: "var(--text-2)" }}>Password</label>
+                <label className="login-label" style={{ marginBottom: 0 }}>Password</label>
                 <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 12 }}>Forgot?</a>
               </div>
-              <PasswordField value={pw} onChange={setPw} field={field} />
+              <PasswordField value={pw} onChange={setPw} field={field} placeholder="Enter password" />
             </div>
 
             {error && (
@@ -153,12 +191,26 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Btn kind="primary" size="lg" full type="submit" disabled={loading} iconRight={loading ? undefined : "arrow-right"} style={{ marginTop: 6 }}>
-              {loading ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span style={{ width: 15, height: 15, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: 999, animation: "swarm-spin 0.7s linear infinite" }} /> Authenticating…</span> : "Sign in"}
-            </Btn>
+            <button
+              type="submit"
+              disabled={loading}
+              className="login-submit"
+            >
+              {loading ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 15, height: 15, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: 999, animation: "swarm-spin 0.7s linear infinite" }} />
+                  Authenticating...
+                </span>
+              ) : (
+                <>
+                  Sign in
+                  <Icon name="arrow-right" size={15} />
+                </>
+              )}
+            </button>
           </form>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "22px 0" }}>
             <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
             <span style={{ fontSize: 11, color: "var(--faint)" }}>or</span>
             <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
@@ -171,8 +223,9 @@ export default function LoginPage() {
           <p className="faint" style={{ textAlign: "center", fontSize: 11.5, marginTop: 10, lineHeight: 1.5 }}>
             Secured with JWT · sessions expire after 24h.<br />By continuing you agree to the acceptable-use policy.
           </p>
-        </div>
-      </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
