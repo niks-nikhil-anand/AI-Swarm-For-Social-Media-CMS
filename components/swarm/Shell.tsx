@@ -181,6 +181,7 @@ export function Sidebar({ view, activeSession, onNew, onGo, onOpenSession }: {
     { label: 'Published Posts', key: 'published', icon: 'send' },
     { label: 'Analytics', key: 'analytics', icon: 'chart', section: 'Insights' },
     { label: 'Sources', key: 'sources', icon: 'globe' },
+    { label: 'Workflows', key: 'workflows', icon: 'layers' },
     { label: 'Settings', key: 'settings', icon: 'gear', section: 'System' },
   ];
 
