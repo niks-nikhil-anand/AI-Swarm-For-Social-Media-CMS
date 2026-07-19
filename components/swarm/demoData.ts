@@ -4,7 +4,7 @@
    Real data comes from the database and LLM agents.
    ============================================================ */
 
-import type { Agent, TimelineEvent, WorkspaceGroup, Source, Slide, Project, Usage } from "./data";
+import type { Agent, TimelineEvent, WorkspaceGroup, Source, Slide, Usage } from "./data";
 
 /* ---------- Demo Agents (for UI visualization only) ---------- */
 export const DEMO_AGENTS: Agent[] = [
