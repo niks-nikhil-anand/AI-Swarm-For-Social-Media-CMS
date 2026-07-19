@@ -1,0 +1,1 @@
+export const MIN_APPROVAL_QUALITY_SCORE = 80;
