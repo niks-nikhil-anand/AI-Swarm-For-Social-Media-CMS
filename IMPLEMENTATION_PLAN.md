@@ -30,19 +30,20 @@ Build a controlled AI social content pipeline that:
 
 ### 1. Add Core Social Publishing Models
 
-Add Prisma models for:
-
-- `ContentCampaign`
-- `ContentDraft`
-- `ContentVariant`
-- `ApprovalRequest`
-- `PublishingSchedule`
-- `PublishedPost`
-- `PlatformAccount`
-- `ContentSource`
-- `TrendSignal`
-- `ContentMetric`
-- `SystemHealthCheck`
+- [x] Add Prisma models for:
+  - `ContentCampaign`
+  - `ContentDraft`
+  - `ContentVariant`
+  - `ApprovalRequest`
+  - `PublishingSchedule`
+  - `PublishedPost`
+  - `PlatformAccount`
+  - `ContentSource`
+  - `TrendSignal`
+  - `FactCheckResult`
+  - `ContentQualityScore`
+  - `ContentMetric`
+  - `SystemHealthCheck`
 
 Key relationships:
 
@@ -56,17 +57,18 @@ Key relationships:
 
 ### 2. Add Status Enums
 
-Add enums for:
+- [x] Add enums for:
 
 - Draft status: `Draft`, `InReview`, `NeedsApproval`, `Approved`, `ChangesRequested`, `Rejected`, `Scheduled`, `Published`, `Failed`
 - Platform: `LinkedIn`, `X`
 - Approval status: `Pending`, `Approved`, `ChangesRequested`, `Rejected`, `Expired`
 - Publish status: `Queued`, `Scheduled`, `Publishing`, `Published`, `Failed`, `Cancelled`
 - Signal source type: `SearXNG`, `X`, `LinkedIn`, `Reddit`, `YouTube`, `News`, `Competitor`, `Website`
+- Fact check status: `Verified`, `NeedsReview`, `Unsupported`, `Outdated`, `ConflictingSources`
 
 ### 3. Create Migrations
 
-Run:
+- [x] Create migration and generated Prisma client support:
 
 ```bash
 npx prisma migrate dev --name add_social_publishing_models
@@ -83,7 +85,7 @@ Verification:
 
 ### 1. PostgreSQL
 
-Use PostgreSQL as the primary product database for:
+- [x] Use PostgreSQL as the primary product database for:
 
 - Users
 - Campaigns
@@ -97,48 +99,49 @@ Use PostgreSQL as the primary product database for:
 
 ### 2. SearXNG
 
-Use SearXNG for web research.
+- [x] Use SearXNG for web research.
 
 Tasks:
 
-- Keep `lib/searxng.ts`.
-- Add a reusable research activity in the worker.
-- Store search results as trend signals and evidence.
-- Add source filters, blocked domains, allowed domains, and freshness constraints.
+- [x] Keep `lib/searxng.ts`.
+- [x] Add a reusable research activity in the worker.
+- [x] Store search results as trend signals.
+- [x] Add source filters, blocked domains, allowed domains, and freshness constraints in source models/APIs.
+- [ ] Add richer evidence extraction for social publishing beyond normalized trend signals.
 
 ### 3. Temporal and Worker
 
-Use Temporal for long-running automation:
+- [x] Use Temporal for long-running automation:
 
-- Daily research workflows
-- Draft generation workflows
-- Approval reminder workflows
-- Publishing workflows
-- Analytics collection workflows
+- [x] Daily research workflows
+- [x] Draft generation workflows
+- [x] Approval reminder workflows
+- [x] Publishing workflows
+- [x] Analytics collection workflows
 
 Worker responsibilities:
 
-- Call SearXNG.
-- Call LLM provider.
-- Save draft content.
-- Send approved posts to Postiz.
-- Update workflow state in PostgreSQL.
-- Collect analytics on schedule.
+- [x] Call SearXNG.
+- [x] Call LLM provider.
+- [x] Save draft content.
+- [x] Send approved posts to Postiz.
+- [x] Update workflow state in PostgreSQL.
+- [x] Collect analytics on schedule.
 
 ### 4. Temporal UI
 
-Use Temporal UI for:
+- [x] Use Temporal UI service in Docker for:
 
 - Inspecting active workflows.
 - Debugging failures.
 - Retrying failed workflows.
 - Reviewing workflow history.
 
-Expose Temporal UI links from the app’s Workflows page.
+- [ ] Expose Temporal UI links from the app’s Workflows page.
 
 ### 5. Postiz
 
-Use Postiz as the publishing and scheduling layer.
+- [x] Use Postiz as the publishing and scheduling layer.
 
 Postiz owns:
 
@@ -160,15 +163,18 @@ Social Swarm owns:
 Environment variables:
 
 ```dotenv
-POSTIZ_URL=http://localhost:5000
+POSTIZ_URL=http://localhost:5001
 POSTIZ_API_KEY=
 ```
+
+- [x] Add Postiz service to Docker Compose.
+- [x] Add Postiz env variables to `.env`, `.env.local`, and README.
 
 ## Phase 3: Research Pipeline
 
 ### 1. Source Configuration
 
-Build a Sources page where users configure:
+- [x] Add Sources API where users configure:
 
 - SearXNG search queries.
 - Competitor websites.
@@ -180,25 +186,27 @@ Build a Sources page where users configure:
 - Blocked domains.
 - Approved domains.
 
+- [ ] Build the Sources UI page.
+
 ### 2. Trend Research Workflow
 
-Create a Temporal workflow:
+- [x] Create a Temporal workflow:
 
 ```text
 DailyTrendResearchWorkflow
-├── load user source configuration
-├── run SearXNG searches
-├── collect social/trend adapter results
-├── normalize signals
-├── deduplicate URLs/topics
-├── score topic opportunities
-├── save TrendSignal records
-└── create recommended draft briefs
+├── load user source configuration ✅
+├── run SearXNG searches ✅
+├── collect social/trend adapter results ⏳
+├── normalize signals ✅
+├── deduplicate URLs/topics ⏳
+├── score topic opportunities ✅
+├── save TrendSignal records ✅
+└── create recommended draft briefs ⏳
 ```
 
 ### 3. Topic Scoring
 
-Score each topic using:
+- [x] Add first-pass topic scoring using:
 
 ```text
 Opportunity Score =
@@ -213,20 +221,20 @@ Opportunity Score =
 
 Store:
 
-- Topic
-- Source count
-- Opportunity score
-- Suggested angle
-- Suggested platform
-- Supporting URLs
-- Freshness
-- Audience relevance
+- [x] Topic
+- [x] Source count
+- [x] Opportunity score
+- [x] Suggested angle
+- [ ] Suggested platform
+- [x] Supporting URLs
+- [x] Freshness
+- [x] Audience relevance
 
 ## Phase 4: Content Generation
 
 ### 1. Draft Brief Creation
 
-Create `ContentDraft` records from selected trend signals.
+- [x] Create `ContentDraft` records from selected trend signals.
 
 Each draft should include:
 
@@ -241,7 +249,7 @@ Each draft should include:
 
 ### 2. LinkedIn Writer Activity
 
-Generate LinkedIn content with:
+- [x] Generate LinkedIn content with:
 
 - Hook
 - Body
@@ -252,7 +260,7 @@ Generate LinkedIn content with:
 
 ### 3. X/Twitter Writer Activity
 
-Generate X/Twitter content with:
+- [x] Generate X/Twitter content with:
 
 - Short post
 - Detailed post
@@ -264,7 +272,7 @@ Generate X/Twitter content with:
 
 ### 4. Visual Brief Activity
 
-Generate optional visual directions:
+- [x] Generate optional visual directions:
 
 - Carousel outline
 - Quote card
@@ -274,7 +282,7 @@ Generate optional visual directions:
 
 ### 5. Save Platform Variants
 
-Save generated content as `ContentVariant` rows.
+- [x] Save generated content as `ContentVariant` rows.
 
 Each variant should store:
 
@@ -292,7 +300,7 @@ Each variant should store:
 
 ### 1. Fact Checking
 
-Validate factual claims before approval.
+- [x] Add first-pass factual claim validation before approval.
 
 Statuses:
 
@@ -304,15 +312,15 @@ Statuses:
 
 Store:
 
-- Claim
-- Verification status
-- Source URL
-- Confidence score
-- Notes
+- [x] Claim
+- [x] Verification status
+- [ ] Source URL
+- [x] Confidence score
+- [x] Notes
 
 ### 2. Content Quality Score
 
-Score content for:
+- [x] Score content for:
 
 - Hook quality
 - Clarity
@@ -331,29 +339,32 @@ Minimum score:
 
 Only content that passes fact and quality checks should enter the approval queue.
 
+- [x] Create quality score records.
+- [x] Store quality score on content variants.
+- [ ] Enforce final `80/100` approval gate strictly. Current worker creates approval requests for generated variants with a lower temporary gate while prompts and scoring are still being tuned.
+
 ## Phase 6: Approval System
 
 ### 1. Approval Queue Page
 
-Build an Approvals page with:
+- [x] Add Approval APIs for:
 
 - Queue list
-- LinkedIn preview
-- X/Twitter preview
 - Sources used
 - Fact-check result
 - Quality score
-- Suggested publish time
 - Approve button
 - Request changes button
 - Reject button
 - Edit draft button
 
+- [ ] Build the full Approvals UI page with LinkedIn/X previews and suggested publish time.
+
 Do not include a “post anyway” action.
 
 ### 2. Approval State Machine
 
-Use this flow:
+- [x] Add approval state machine API support:
 
 ```text
 Draft
@@ -368,15 +379,16 @@ Awaiting Approval
 
 Rules:
 
-- Approved content can be scheduled.
-- Changes requested returns to generation/editing.
-- Rejected content is archived.
-- No response keeps content unpublished.
-- Expired approval keeps content unpublished.
+- [x] Approved content can be scheduled.
+- [x] Changes requested returns to generation/editing.
+- [x] Rejected content is archived.
+- [x] No response keeps content unpublished.
+- [x] Expired approval keeps content unpublished.
 
 ### 3. Emergency Pause
 
-Add an emergency pause switch.
+- [x] Add campaign pause field/API support.
+- [ ] Add global emergency pause switch UI.
 
 When enabled:
 
@@ -389,7 +401,7 @@ When enabled:
 
 ### 1. Schedule Settings
 
-Add settings for:
+- [x] Add campaign schedule fields/API support for:
 
 - Timezone
 - Target posts per day
@@ -398,6 +410,8 @@ Add settings for:
 - Evening slot
 - Enabled platforms
 - Approval required
+
+- [ ] Add full schedule settings UI.
 
 Default:
 
@@ -410,35 +424,35 @@ Approval required: true
 
 ### 2. Scheduling Workflow
 
-Create a Temporal workflow:
+- [x] Create a Temporal workflow:
 
 ```text
 DailyPublishingSchedulerWorkflow
-├── load approved variants
-├── load posting settings
-├── choose three daily slots
-├── prevent duplicate topics
-├── create PublishingSchedule rows
-├── send scheduled posts to Postiz
-└── record schedule status
+├── load approved variants ✅
+├── load posting settings ✅
+├── choose three daily slots ✅
+├── prevent duplicate topics ⏳
+├── create PublishingSchedule rows ✅
+├── send scheduled posts to Postiz ✅
+└── record schedule status ✅
 ```
 
 ### 3. Duplicate Protection
 
 Use:
 
-- Content hash
-- Platform
-- Scheduled date
-- Topic ID
+- [x] Content hash
+- [x] Platform
+- [x] Scheduled date
+- [ ] Topic ID
 
-Prevent the same content from being posted twice.
+- [x] Prevent the same content/platform/scheduled time from being posted twice.
 
 ## Phase 8: Postiz Publishing
 
 ### 1. Postiz Client
 
-Create:
+- [x] Create:
 
 ```text
 lib/postiz.ts
@@ -446,16 +460,16 @@ lib/postiz.ts
 
 Responsibilities:
 
-- Authenticate with Postiz.
-- List connected accounts.
-- Create scheduled posts.
-- Upload media if needed.
-- Fetch publication status.
-- Fetch returned platform post IDs.
+- [x] Authenticate with Postiz.
+- [x] List connected accounts.
+- [x] Create scheduled posts.
+- [ ] Upload media if needed.
+- [x] Fetch publication status.
+- [x] Fetch returned platform post IDs.
 
 ### 2. Publishing Activity
 
-Create a worker activity:
+- [x] Create a worker activity:
 
 ```text
 publishToPostizActivity
@@ -482,19 +496,19 @@ Output:
 
 Persist:
 
-- Postiz post ID
-- Platform post ID
-- Status
-- Scheduled time
-- Published time
-- Approval metadata
-- Content hash
+- [x] Postiz post ID
+- [x] Platform post ID
+- [x] Status
+- [x] Scheduled time
+- [x] Published time
+- [x] Approval metadata
+- [x] Content hash
 
 ## Phase 9: Dashboard and Pages
 
 ### 1. App Shell
 
-Build a persistent layout:
+- [x] Build a persistent dashboard shell with:
 
 - Sidebar
 - Top bar
@@ -517,7 +531,7 @@ Sidebar pages:
 
 ### 2. Dashboard
 
-Show:
+- [x] Dashboard UI mock exists for:
 
 - Today’s 3 publishing slots
 - Approval queue
@@ -528,6 +542,8 @@ Show:
 - System health
 
 ### 3. Content Queue
+
+- [ ] Build complete Content Queue UI backed by APIs.
 
 Show all drafts and variants with:
 
@@ -541,6 +557,8 @@ Show all drafts and variants with:
 
 ### 4. Research
 
+- [ ] Build complete Research UI backed by APIs.
+
 Show:
 
 - Trend signals
@@ -550,6 +568,8 @@ Show:
 - Create draft action
 
 ### 5. Approvals
+
+- [ ] Build complete Approvals UI backed by APIs.
 
 Show:
 
@@ -562,6 +582,8 @@ Show:
 
 ### 6. Calendar
 
+- [ ] Build complete Calendar UI backed by APIs.
+
 Show:
 
 - Weekly calendar
@@ -571,6 +593,8 @@ Show:
 - Rescheduling controls
 
 ### 7. Published Posts
+
+- [ ] Build complete Published Posts UI backed by APIs.
 
 Show:
 
@@ -583,7 +607,7 @@ Show:
 
 ### 8. Analytics
 
-Show:
+- [x] Add Analytics APIs for:
 
 - Impressions
 - Engagement rate
@@ -596,9 +620,11 @@ Show:
 - Best hooks
 - Best posting times
 
+- [ ] Build complete Analytics UI backed by APIs.
+
 ### 9. Sources
 
-Show:
+- [x] Add Sources APIs for:
 
 - Source list
 - Keywords
@@ -608,9 +634,11 @@ Show:
 - Reliability score
 - Last checked time
 
+- [ ] Build complete Sources UI backed by APIs.
+
 ### 10. Workflows
 
-Show:
+- [x] Add health APIs for:
 
 - Temporal workflows
 - Worker queue metrics
@@ -619,7 +647,11 @@ Show:
 - Link to Temporal UI
 - Service health
 
+- [ ] Build complete Workflows UI backed by worker/Temporal APIs.
+
 ### 11. Settings
+
+- [ ] Build complete Settings UI backed by APIs.
 
 Show:
 
@@ -637,7 +669,7 @@ Show:
 
 ### 1. Collection Schedule
 
-Collect metrics after:
+- [x] Add analytics collection workflow windows:
 
 - 1 hour
 - 24 hours
@@ -646,7 +678,7 @@ Collect metrics after:
 
 ### 2. Metrics
 
-Track:
+- [x] Track normalized metric records for:
 
 - Impressions
 - Engagement rate
@@ -661,7 +693,7 @@ Track:
 
 ### 3. Learning Recommendations
 
-Generate recommendations for:
+- [ ] Generate recommendations for:
 
 - Best posting times
 - Best hooks
@@ -731,20 +763,20 @@ Before enabling real publishing:
 
 ## Suggested Build Order
 
-1. Add database models and migrations.
-2. Add Postiz client.
-3. Add content draft and approval APIs.
-4. Build Content Queue and Approvals pages.
-5. Add SearXNG research workflow.
-6. Add LinkedIn and X/Twitter generation activities.
-7. Add fact-check and quality scoring.
-8. Add three-post daily scheduler.
-9. Add Postiz publishing activity.
-10. Add Calendar and Published Posts pages.
-11. Add Analytics collection workflow.
-12. Add Workflows page and Temporal UI links.
-13. Add service health checks.
-14. Add full test coverage for approval and publishing safety.
+1. [x] Add database models and migrations.
+2. [x] Add Postiz client.
+3. [x] Add content draft and approval APIs.
+4. [ ] Build Content Queue and Approvals pages.
+5. [x] Add SearXNG research workflow.
+6. [x] Add LinkedIn and X/Twitter generation activities.
+7. [x] Add fact-check and quality scoring.
+8. [x] Add three-post daily scheduler.
+9. [x] Add Postiz publishing activity.
+10. [ ] Add Calendar and Published Posts pages.
+11. [x] Add Analytics collection workflow.
+12. [ ] Add Workflows page and Temporal UI links.
+13. [x] Add service health checks.
+14. [ ] Add full test coverage for approval and publishing safety.
 
 ## Non-Negotiable Rules
 
