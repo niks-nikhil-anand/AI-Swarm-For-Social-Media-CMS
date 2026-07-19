@@ -678,16 +678,39 @@ The project uses two environment files:
 Required values:
 
 ```dotenv
+DB_PASSWORD=postgres
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/swarm
+SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/swarm_shadow
 AUTH_SECRET=replace-with-a-long-random-secret
 OPENROUTER_API_KEY=
 TEMPORAL_ADDRESS=localhost:7233
 TEMPORAL_NAMESPACE=default
+TEMPORAL_CORS_ORIGINS=http://localhost:3000
 SEARXNG_URL=http://localhost:8888
+SEARXNG_BASE_URL=http://localhost:8888/
+REDIS_URL=redis://localhost:6379
 NEXT_PUBLIC_TEMPORAL_UI_URL=http://localhost:8080
-POSTIZ_URL=http://localhost:5000
+POSTIZ_URL=http://localhost:5001
 POSTIZ_API_KEY=
+POSTIZ_PORT=5001
+POSTIZ_PUBLIC_URL=http://localhost:5001
+POSTIZ_PUBLIC_BACKEND_URL=http://localhost:5001/api
+POSTIZ_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/swarm?schema=postiz
+POSTIZ_JWT_SECRET=replace-this-postiz-jwt-secret
+POSTIZ_NOT_SECURED=true
+POSTIZ_API_LIMIT=90
+GEMINI_API_KEY=
+LINKEDIN_CLIENT_ID=
+LINKEDIN_CLIENT_SECRET=
+X_API_KEY=
+X_API_SECRET=
+X_BEARER_TOKEN=
+X_ACCESS_TOKEN=
+X_ACCESS_TOKEN_SECRET=
+X_URL=
 ```
+
+For `.env` used inside Docker services, use service hostnames such as `postgres`, `redis`, `searxng`, `temporal`, and `postiz`. For `.env.local` used by the Next.js dev server on your Mac, use `localhost` and exposed ports.
 
 Do not commit real credentials.
 
@@ -703,7 +726,7 @@ This starts:
 - Temporal on `localhost:7233`
 - Temporal UI on `localhost:8080`
 - SearXNG on `localhost:8888`
-- Postiz on `localhost:5000`
+- Postiz on `localhost:5001`
 - Worker service
 
 The expected Docker Compose stack for this product is PostgreSQL, SearXNG, Postiz, Temporal, Temporal UI and the worker.
