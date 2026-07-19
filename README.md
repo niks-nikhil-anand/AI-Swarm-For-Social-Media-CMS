@@ -1,12 +1,12 @@
-# Social Swarm - AI Social Media Automation, Research, Scheduling and Publishing
+# Social Swarm - Self-Learning AI Social Media Automation Platform
 
-Social Swarm is a self-hostable AI social media automation platform for researching trending topics, generating platform-native posts, reviewing content with human approval, scheduling posts, publishing through connected social accounts, and tracking performance analytics.
+Social Swarm is a self-hostable, self-learning AI social media automation platform for researching trending topics, generating platform-native posts, reviewing content with human approval, scheduling posts, publishing through connected social accounts, and learning from performance analytics over time.
 
-It is built for creators, founders, marketers, agencies and small teams that want an automated content workflow for LinkedIn and X/Twitter without losing control over quality, sources, approvals or publishing safety.
+It is built for creators, founders, marketers, agencies and small teams that want an automated LinkedIn and X/Twitter content workflow that improves from real publishing data without losing control over quality, sources, approvals or publishing safety.
 
 ## What Is Social Swarm?
 
-Social Swarm turns a business goal into researched, reviewed and scheduled social content.
+Social Swarm turns a business goal into researched, reviewed, scheduled and performance-informed social content.
 
 Instead of asking one chatbot to write posts blindly, Social Swarm uses a controlled agent workflow:
 
@@ -19,7 +19,9 @@ Instead of asking one chatbot to write posts blindly, Social Swarm uses a contro
 7. Require human approval before publishing.
 8. Schedule approved posts through Postiz.
 9. Store publishing records and analytics.
-10. Feed performance insights into future recommendations.
+10. Learn from post performance and feed insights into future recommendations.
+
+The self-learning layer does not mean the system publishes anything without permission. It means Social Swarm collects post metrics, compares performance patterns and improves recommendations for topics, hooks, formats, CTAs and posting windows. Major strategy changes should still be reviewed by a human.
 
 ## Why This Project Is Useful
 
@@ -34,7 +36,7 @@ Best parts of the project:
 - **Self-hostable stack**: PostgreSQL, Redis, SearXNG, Temporal, Postiz and worker services run locally with Docker Compose.
 - **Durable workflows**: Temporal handles long-running research, generation, scheduling, publishing sync and analytics jobs.
 - **Postiz integration**: Social Swarm can hand approved posts to a self-hosted Postiz instance for social account scheduling.
-- **Analytics-ready database**: published posts and metric snapshots are normalized for dashboards and future learning.
+- **Self-learning analytics loop**: published posts and metric snapshots are normalized so the system can learn which topics, hooks, formats and times perform best.
 - **Operational health APIs**: the app can report health for Postgres, SearXNG, Postiz, Redis and Temporal.
 
 ## Product Flow
@@ -52,8 +54,36 @@ Business Goal
     -> Three-Post Daily Scheduler
     -> Postiz Publishing
     -> Published Post Records
-    -> Analytics and Learning
+    -> Analytics Collection
+    -> Learning Recommendations
+    -> Better Future Content
 ```
+
+## Self-Learning AI Loop
+
+Social Swarm is designed to improve with usage.
+
+```text
+Published posts
+    -> Metric snapshots at 1h, 24h, 7d and 30d
+    -> Normalized analytics
+    -> Pattern detection
+    -> Recommendations
+    -> Human review
+    -> Updated future content strategy
+```
+
+The learning layer can recommend:
+
+- Better posting times.
+- Stronger opening hooks.
+- Higher-performing topics.
+- Better CTA styles.
+- Better post length by platform.
+- Underperforming formats to avoid.
+- Content pillars that create more engagement or leads.
+
+Social Swarm keeps learning recommendations separate from permanent brand rules. A human should approve meaningful strategy changes before they affect publishing.
 
 ## Core Features
 
@@ -72,6 +102,7 @@ Business Goal
 - Platform account sync through Postiz.
 - Published post records with platform IDs.
 - Analytics APIs for metrics, summaries and dashboard rollups.
+- Self-learning workflow foundation for future recommendations.
 - Health APIs for service checks and stored operational samples.
 - API-backed dashboard pages for content queue, research, approvals, calendar, published posts, analytics, sources, workflows and settings.
 
@@ -113,12 +144,15 @@ flowchart TB
     Worker --> Review["Fact and Quality Review"]
     Worker --> Scheduler["Scheduling Workflow"]
     Worker --> Analytics["Analytics Collection"]
+    Worker --> Learning["Learning Recommendations"]
 
     Research --> SearXNG["SearXNG"]
     Generation --> LLM["OpenRouter-Compatible LLM"]
     Scheduler --> Postiz["Postiz"]
     Postiz --> LinkedIn["LinkedIn"]
     Postiz --> X["X/Twitter"]
+    Analytics --> Learning
+    Learning --> API
 ```
 
 ## Technology Stack
@@ -300,7 +334,7 @@ Implemented:
 - Campaign, source, trend, draft, variant, approval, schedule and published-post APIs.
 - Analytics and health APIs.
 - Postiz client and platform account sync.
-- Temporal worker workflows for trend research, draft generation, approval expiry, publishing scheduling, status sync and analytics collection.
+- Temporal worker workflows for trend research, draft generation, approval expiry, publishing scheduling, status sync, analytics collection and learning-analysis health records.
 - API-backed dashboard views.
 - Login, register and public landing pages.
 
@@ -309,7 +343,7 @@ Still planned:
 - Full direct LinkedIn OAuth flow inside Social Swarm.
 - Full direct X/Twitter posting client inside Social Swarm.
 - Postiz media upload support.
-- Learning recommendations from analytics.
+- Full learning recommendation UI and approval flow.
 - More complete test coverage for workflow retry, publishing safety and approval rules.
 - Production credential encryption and audit hardening.
 
@@ -328,7 +362,7 @@ Social Swarm is designed around controlled automation:
 
 ## SEO Keywords
 
-AI social media automation, LinkedIn automation, X Twitter scheduler, self-hosted social media scheduler, AI content workflow, social media approval workflow, AI content generation, Postiz alternative, Buffer alternative, Temporal workflow automation, SearXNG research automation, Prisma Next.js social media app.
+self-learning AI social media automation, automated social media research, LinkedIn automation, X Twitter scheduler, self-hosted social media scheduler, AI content workflow, social media approval workflow, AI content generation, AI social media analytics, Postiz alternative, Buffer alternative, Temporal workflow automation, SearXNG research automation, Prisma Next.js social media app.
 
 ## External Documentation
 
