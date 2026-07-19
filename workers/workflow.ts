@@ -6,8 +6,38 @@
 
 import { proxyActivities } from "@temporalio/workflow";
 import type * as activities from "./activities";
+import { MIN_APPROVAL_QUALITY_SCORE } from "../lib/quality-gate";
 
-const { performSearch, runAgent, saveDeck, saveDocument, markProjectComplete } = proxyActivities<typeof activities>({
+const {
+  performSearch,
+  runAgent,
+  saveDeck,
+  saveDocument,
+  markProjectComplete,
+  loadSourceConfigurationActivity,
+  runSearxngSearchActivity,
+  normalizeTrendSignalsActivity,
+  extractEvidenceAndDedupeSignalsActivity,
+  scoreTrendSignalsActivity,
+  saveTrendSignalsActivity,
+  createDraftBriefActivity,
+  generateLinkedInVariantActivity,
+  generateXVariantActivity,
+  generateVisualBriefActivity,
+  factCheckVariantActivity,
+  scoreContentQualityActivity,
+  createApprovalRequestActivity,
+  expireStaleApprovalsActivity,
+  loadApprovedVariantsActivity,
+  createPublishingScheduleActivity,
+  publishToPostizActivity,
+  syncPostizPublishStatusActivity,
+  collectPostMetricsActivity,
+  runLearningAnalysisActivity,
+  listPublishableSchedulesActivity,
+  listPublishedPostsForMetricsActivity,
+  nextSlotIso,
+} = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   retry: {
     initialInterval: "2s",
@@ -34,6 +64,50 @@ export interface ResearchWorkflowResult {
   projectId: string;
   status: "completed" | "failed";
   stagesRun: string[];
+}
+
+export interface SocialCampaignWorkflowInput {
+  userId: string;
+  campaignId?: string;
+}
+
+export interface DraftGenerationWorkflowInput extends SocialCampaignWorkflowInput {
+  draftId: string;
+  requestedById?: string;
+}
+
+export interface TrendResearchWorkflowResult {
+  status: "completed";
+  sourcesScanned: number;
+  searchesRun: number;
+  savedSignalIds: string[];
+  createdDraftIds: string[];
+}
+
+export interface DraftGenerationWorkflowResult {
+  status: "completed";
+  draftId: string;
+  variantIds: string[];
+  approvalRequestIds: string[];
+}
+
+export interface PublishingSchedulerWorkflowResult {
+  status: "completed";
+  scheduleIds: string[];
+  skippedVariantIds: string[];
+}
+
+export interface PublishingStatusWorkflowResult {
+  status: "completed";
+  checkedSchedules: number;
+  statuses: Array<{ scheduleId: string; status: string }>;
+}
+
+export interface AnalyticsCollectionWorkflowResult {
+  status: "completed";
+  postsChecked: number;
+  metricIds: string[];
+  learningStatus: string;
 }
 
 function pick(agents: WorkflowAgentRef[], slug: string): WorkflowAgentRef | undefined {
@@ -146,4 +220,145 @@ export async function researchProjectWorkflow(
     await markProjectComplete({ projectId, failed: true });
     throw error;
   }
+}
+
+export async function dailyTrendResearchWorkflow(
+  input: SocialCampaignWorkflowInput
+): Promise<TrendResearchWorkflowResult> {
+  const sources = await loadSourceConfigurationActivity(input);
+  const allSignals: Array<Record<string, unknown>> = [];
+  let searchesRun = 0;
+
+  for (const source of sources) {
+    const queries = Array.from(
+      new Set([source.query, ...source.keywords].filter((query): query is string => Boolean(query)))
+    ).slice(0, 3);
+
+    for (const query of queries) {
+      const results = await runSearxngSearchActivity({ sourceId: source.id, query });
+      searchesRun += 1;
+      const signals = await normalizeTrendSignalsActivity({
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceType: source.type,
+        results,
+      });
+      allSignals.push(...signals);
+    }
+  }
+
+  const dedupedSignals = await extractEvidenceAndDedupeSignalsActivity(allSignals);
+  const scoredSignals = await scoreTrendSignalsActivity(dedupedSignals);
+  const savedSignalIds = await saveTrendSignalsActivity({ signals: scoredSignals });
+  const createdDraftIds: string[] = [];
+
+  if (input.campaignId) {
+    for (const trendSignalId of savedSignalIds.slice(0, 5)) {
+      const draftId = await createDraftBriefActivity({ campaignId: input.campaignId, trendSignalId });
+      createdDraftIds.push(draftId);
+    }
+  }
+
+  return {
+    status: "completed",
+    sourcesScanned: sources.length,
+    searchesRun,
+    savedSignalIds,
+    createdDraftIds,
+  };
+}
+
+export async function draftGenerationWorkflow(
+  input: DraftGenerationWorkflowInput
+): Promise<DraftGenerationWorkflowResult> {
+  const [linkedinVariantId, xVariantId] = await Promise.all([
+    generateLinkedInVariantActivity({ draftId: input.draftId }),
+    generateXVariantActivity({ draftId: input.draftId }),
+  ]);
+  await generateVisualBriefActivity({ draftId: input.draftId });
+
+  const variantIds = [linkedinVariantId, xVariantId];
+  const approvalRequestIds: string[] = [];
+
+  for (const variantId of variantIds) {
+    await factCheckVariantActivity({ variantId });
+    const score = await scoreContentQualityActivity({ variantId });
+    if (score >= MIN_APPROVAL_QUALITY_SCORE) {
+      const approvalId = await createApprovalRequestActivity({
+        variantId,
+        requestedById: input.requestedById ?? input.userId,
+      });
+      approvalRequestIds.push(approvalId);
+    }
+  }
+
+  return {
+    status: "completed",
+    draftId: input.draftId,
+    variantIds,
+    approvalRequestIds,
+  };
+}
+
+export async function approvalReminderWorkflow(): Promise<{ status: "completed"; expiredApprovals: number }> {
+  const expiredApprovals = await expireStaleApprovalsActivity();
+  return { status: "completed", expiredApprovals };
+}
+
+export async function dailyPublishingSchedulerWorkflow(
+  input: SocialCampaignWorkflowInput
+): Promise<PublishingSchedulerWorkflowResult> {
+  const approvedVariants = await loadApprovedVariantsActivity(input);
+  const scheduleIds: string[] = [];
+  const skippedVariantIds: string[] = [];
+
+  for (let i = 0; i < Math.min(approvedVariants.length, 3); i++) {
+    const variant = approvedVariants[i];
+    const scheduledFor = await nextSlotIso(i, variant.timezone);
+    const scheduleId = await createPublishingScheduleActivity({
+      variantId: variant.id,
+      approvalId: variant.approvalId,
+      scheduledFor,
+    });
+
+    if (!scheduleId) {
+      skippedVariantIds.push(variant.id);
+      continue;
+    }
+
+    scheduleIds.push(scheduleId);
+    await publishToPostizActivity({ scheduleId });
+  }
+
+  return { status: "completed", scheduleIds, skippedVariantIds };
+}
+
+export async function publishingStatusWorkflow(): Promise<PublishingStatusWorkflowResult> {
+  const scheduleIds = await listPublishableSchedulesActivity();
+  const statuses: Array<{ scheduleId: string; status: string }> = [];
+
+  for (const scheduleId of scheduleIds) {
+    const status = await syncPostizPublishStatusActivity({ scheduleId });
+    statuses.push({ scheduleId, status: String(status) });
+  }
+
+  return { status: "completed", checkedSchedules: scheduleIds.length, statuses };
+}
+
+export async function analyticsCollectionWorkflow(
+  input: SocialCampaignWorkflowInput
+): Promise<AnalyticsCollectionWorkflowResult> {
+  const postIds = await listPublishedPostsForMetricsActivity(input);
+  const metricIds: string[] = [];
+  const metricWindows = [1, 24, 168, 720];
+
+  for (const publishedPostId of postIds) {
+    for (const windowHours of metricWindows) {
+      const metricId = await collectPostMetricsActivity({ publishedPostId, windowHours });
+      metricIds.push(metricId);
+    }
+  }
+
+  const learningStatus = await runLearningAnalysisActivity(input);
+  return { status: "completed", postsChecked: postIds.length, metricIds, learningStatus };
 }
