@@ -15,7 +15,9 @@ datasource db {
   // Example: postgresql://user:pass@host/db?schema=public&connection_limit=20&statement_timeout=30000
 }
 
-/* ---------- Enums ---------- */
+/**
+ * ---------- Enums ----------
+ */
 
 enum SkillCategory {
   Research
@@ -66,7 +68,62 @@ enum ChartKind {
   Bars
 }
 
-/* ---------- Models ---------- */
+enum SocialPlatform {
+  LinkedIn
+  X
+}
+
+enum ContentDraftStatus {
+  Draft
+  InReview
+  NeedsApproval
+  Approved
+  ChangesRequested
+  Rejected
+  Scheduled
+  Published
+  Failed
+}
+
+enum ApprovalStatus {
+  Pending
+  Approved
+  ChangesRequested
+  Rejected
+  Expired
+}
+
+enum PublishStatus {
+  Queued
+  Scheduled
+  Publishing
+  Published
+  Failed
+  Cancelled
+}
+
+enum SignalSourceType {
+  SearXNG
+  X
+  LinkedIn
+  Reddit
+  YouTube
+  News
+  Competitor
+  Website
+}
+
+enum FactCheckStatus {
+  Verified
+  NeedsReview
+  Unsupported
+  Outdated
+  ConflictingSources
+}
+
+/**
+ * ---------- Models ----------
+ */
 
 model User {
   id           String   @id @default(cuid())
@@ -79,6 +136,12 @@ model User {
   skills              Skill[]
   agentDefinitions    AgentDefinition[]
   projects            Project[]
+  contentCampaigns    ContentCampaign[]
+  platformAccounts    PlatformAccount[]
+  contentSources      ContentSource[]
+  approvalRequests    ApprovalRequest[]    @relation("ApprovalRequestedBy")
+  approvalDecisions   ApprovalRequest[]    @relation("ApprovalDecidedBy")
+  systemHealthChecks  SystemHealthCheck[]
 }
 
 // Maps to Provider / Settings' Intelligence card.
@@ -98,8 +161,8 @@ model ProviderCredential {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
   @@unique([userId, provider])
+  @@index([userId])
 }
 
 // Maps to Skill (Skills page).
@@ -159,15 +222,15 @@ model Project {
   createdAt       DateTime      @default(now())
   completedAt     DateTime?
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agents          ProjectAgent[]
-  timelineEvents  TimelineEvent[]
-  slides          Slide[]
-  sections        Section[]
-  references      Reference[]
-  sources         Source[]
-  searchResults   SearchResult[]
-  evidence        Evidence[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agents         ProjectAgent[]
+  timelineEvents TimelineEvent[]
+  slides         Slide[]
+  sections       Section[]
+  references     Reference[]
+  sources        Source[]
+  searchResults  SearchResult[]
+  evidence       Evidence[]
 
   @@index([userId])
 }
@@ -205,7 +268,7 @@ model ProjectAgent {
 // Maps to TimelineEvent (Run stage log). Drops the mock's 0-100 sim-clock
 // field `t` — createdAt gives real ordering once this is a real run.
 model TimelineEvent {
-  id             String             @id @default(cuid())
+  id             String            @id @default(cuid())
   projectId      String
   projectAgentId String
   type           TimelineEventType
@@ -213,7 +276,7 @@ model TimelineEvent {
   url            String?
   topic          String?
   toAgentId      String?
-  createdAt      DateTime           @default(now())
+  createdAt      DateTime          @default(now())
 
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectAgent ProjectAgent  @relation("AgentTimelineEvents", fields: [projectAgentId], references: [id], onDelete: Cascade)
@@ -240,25 +303,25 @@ model Slide {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
   @@unique([projectId, n])
+  @@index([projectId])
 }
 
 // A section of the written deliverable (Output stage, document formats:
 // pdf/docx/blog/md/exec). Populated from the Synthesis Agent's output.
 model Section {
-  id           String   @id @default(cuid())
-  projectId    String
-  n            Int
-  heading      String
-  body         String   @db.Text
-  keyTakeaway  String?
-  citations    String[]
+  id          String   @id @default(cuid())
+  projectId   String
+  n           Int
+  heading     String
+  body        String   @db.Text
+  keyTakeaway String?
+  citations   String[]
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
   @@unique([projectId, n])
+  @@index([projectId])
 }
 
 // A citation reference (e.g. "ref-1") resolved by the Synthesis Agent,
@@ -272,8 +335,8 @@ model Reference {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
   @@unique([projectId, refId])
+  @@index([projectId])
 }
 
 // A stored SearXNG search result for a project (research evidence trail).
@@ -291,8 +354,8 @@ model SearchResult {
   project  Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   evidence Evidence[]
 
-  @@index([projectId])
   @@unique([projectId, url])
+  @@index([projectId])
 }
 
 // Extracted evidence tied back to a search result (claim + citation).
@@ -330,4 +393,341 @@ model Source {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+/**
+ * ---------- Social publishing models ----------
+ */
+
+// A workspace-level content initiative such as a monthly campaign, product
+// launch, or always-on social publishing lane.
+model ContentCampaign {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?   @db.Text
+  objective   String?
+  audience    String?
+  timezone    String    @default("Asia/Kolkata")
+  postsPerDay Int       @default(3)
+  isPaused    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drafts  ContentDraft[]
+  sources ContentSource[]
+
+  @@index([userId])
+  @@index([archivedAt])
+}
+
+// A selected idea/brief that can produce one or more platform-native variants.
+model ContentDraft {
+  id                String             @id @default(cuid())
+  campaignId        String
+  trendSignalId     String?
+  title             String
+  topic             String
+  objective         String?
+  audience          String?
+  contentPillar     String?
+  primaryKeyword    String?
+  secondaryKeywords String[]
+  suggestedCta      String?
+  targetPlatforms   SocialPlatform[]
+  status            ContentDraftStatus @default(Draft)
+  qualityScore      Int?
+  factStatus        FactCheckStatus?
+  supportingUrls    String[]
+  notes             String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  campaign    ContentCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  trendSignal TrendSignal?     @relation(fields: [trendSignalId], references: [id], onDelete: SetNull)
+  variants    ContentVariant[]
+
+  @@index([campaignId])
+  @@index([trendSignalId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// A generated LinkedIn or X/Twitter-ready version of a draft.
+model ContentVariant {
+  id               String           @id @default(cuid())
+  draftId          String
+  platform         SocialPlatform
+  hook             String?
+  body             String           @db.Text
+  threadItems      String[]
+  hashtags         String[]
+  visualBrief      String?          @db.Text
+  sourceReferences String[]
+  modelUsed        String?
+  tokensIn         Int              @default(0)
+  tokensOut        Int              @default(0)
+  characterCount   Int              @default(0)
+  qualityScore     Int?
+  factStatus       FactCheckStatus?
+  contentHash      String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  draft         ContentDraft          @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  approvals     ApprovalRequest[]
+  schedules     PublishingSchedule[]
+  factChecks    FactCheckResult[]
+  qualityScores ContentQualityScore[]
+
+  @@unique([platform, contentHash])
+  @@index([draftId])
+  @@index([platform])
+}
+
+// Human approval gate. Publishing workflows must require Approved by default.
+model ApprovalRequest {
+  id            String         @id @default(cuid())
+  variantId     String
+  requestedById String
+  decidedById   String?
+  status        ApprovalStatus @default(Pending)
+  message       String?        @db.Text
+  decisionNote  String?        @db.Text
+  requestedAt   DateTime       @default(now())
+  decidedAt     DateTime?
+  expiresAt     DateTime?
+
+  variant     ContentVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  requestedBy User                 @relation("ApprovalRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  decidedBy   User?                @relation("ApprovalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  schedules   PublishingSchedule[]
+
+  @@index([variantId])
+  @@index([requestedById])
+  @@index([decidedById])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// Connected Postiz-backed social account metadata.
+model PlatformAccount {
+  id              String         @id @default(cuid())
+  userId          String
+  platform        SocialPlatform
+  displayName     String
+  handle          String?
+  postizAccountId String
+  isActive        Boolean        @default(true)
+  lastSyncedAt    DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedules PublishingSchedule[]
+  posts     PublishedPost[]
+
+  @@unique([userId, platform, postizAccountId])
+  @@index([userId])
+  @@index([platform])
+}
+
+// A scheduled publish attempt for one approved variant/account/time.
+model PublishingSchedule {
+  id             String         @id @default(cuid())
+  variantId      String
+  approvalId     String?
+  accountId      String
+  platform       SocialPlatform
+  status         PublishStatus  @default(Queued)
+  scheduledFor   DateTime
+  timezone       String         @default("Asia/Kolkata")
+  postizPostId   String?
+  idempotencyKey String
+  contentHash    String
+  errorMessage   String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  variant  ContentVariant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  approval ApprovalRequest? @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+  account  PlatformAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  post     PublishedPost?
+
+  @@unique([platform, idempotencyKey])
+  @@unique([variantId, platform, scheduledFor])
+  @@index([variantId])
+  @@index([approvalId])
+  @@index([accountId])
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+// Final platform publication record, including IDs returned by Postiz/platforms.
+model PublishedPost {
+  id             String         @id @default(cuid())
+  scheduleId     String         @unique
+  accountId      String
+  platform       SocialPlatform
+  postizPostId   String?
+  platformPostId String?
+  url            String?        @db.VarChar(2048)
+  contentHash    String
+  publishedAt    DateTime
+  createdAt      DateTime       @default(now())
+
+  schedule PublishingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  account  PlatformAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  metrics  ContentMetric[]
+
+  @@unique([platform, platformPostId])
+  @@index([accountId])
+  @@index([platform])
+  @@index([publishedAt])
+}
+
+// User-configured source, search, competitor, keyword, hashtag, or allow/block
+// rule used by research workflows.
+model ContentSource {
+  id             String           @id @default(cuid())
+  userId         String
+  campaignId     String?
+  type           SignalSourceType
+  name           String
+  query          String?
+  url            String?          @db.VarChar(2048)
+  handle         String?
+  keywords       String[]
+  allowedDomains String[]
+  blockedDomains String[]
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign ContentCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  signals  TrendSignal[]
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([type])
+  @@index([isActive])
+}
+
+// Normalized research/social signal from SearXNG, social listening, news, etc.
+model TrendSignal {
+  id                  String           @id @default(cuid())
+  sourceId            String?
+  type                SignalSourceType
+  topic               String
+  title               String?
+  url                 String?          @db.VarChar(2048)
+  snippet             String?          @db.Text
+  sourceName          String?
+  sourceCount         Int              @default(1)
+  trendDirection      String?
+  targetAudience      String?
+  suggestedAngles     String[]
+  supportingUrls      String[]
+  primaryKeyword      String?
+  opportunityScore    Int?
+  freshnessScore      Int?
+  businessRelevance   Int?
+  audienceRelevance   Int?
+  engagementPotential Int?
+  capturedAt          DateTime         @default(now())
+
+  source ContentSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  drafts ContentDraft[]
+
+  @@index([sourceId])
+  @@index([type])
+  @@index([topic])
+  @@index([opportunityScore])
+  @@index([capturedAt])
+}
+
+// Claim-level verification attached to a generated platform variant.
+model FactCheckResult {
+  id          String          @id @default(cuid())
+  variantId   String
+  claim       String          @db.Text
+  status      FactCheckStatus
+  sourceUrl   String?         @db.VarChar(2048)
+  sourceTitle String?
+  confidence  Int?
+  notes       String?         @db.Text
+  checkedAt   DateTime        @default(now())
+
+  variant ContentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+  @@index([status])
+}
+
+// Scorecard used to decide whether a variant may enter approval.
+model ContentQualityScore {
+  id                  String   @id @default(cuid())
+  variantId           String
+  clarity             Int
+  brandAlignment      Int
+  platformFit         Int
+  factualConfidence   Int
+  engagementPotential Int
+  ctaQuality          Int?
+  hashtagQuality      Int?
+  overallScore        Int
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now())
+
+  variant ContentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+  @@index([overallScore])
+}
+
+// Normalized performance metric snapshots from Postiz/platform APIs.
+model ContentMetric {
+  id              String   @id @default(cuid())
+  publishedPostId String
+  collectedAt     DateTime @default(now())
+  windowHours     Int
+  impressions     Int?
+  likes           Int?
+  comments        Int?
+  reposts         Int?
+  saves           Int?
+  profileVisits   Int?
+  linkClicks      Int?
+  leads           Int?
+  followersGained Int?
+  engagementRate  Float?
+  conversionRate  Float?
+  raw             Json?
+
+  publishedPost PublishedPost @relation(fields: [publishedPostId], references: [id], onDelete: Cascade)
+
+  @@unique([publishedPostId, windowHours, collectedAt])
+  @@index([publishedPostId])
+  @@index([collectedAt])
+}
+
+// Lightweight health/status samples for dashboard and operations views.
+model SystemHealthCheck {
+  id        String   @id @default(cuid())
+  userId    String?
+  service   String
+  status    String
+  latencyMs Int?
+  message   String?  @db.Text
+  checkedAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([service])
+  @@index([status])
+  @@index([checkedAt])
 }
