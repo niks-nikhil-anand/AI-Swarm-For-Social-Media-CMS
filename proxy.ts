@@ -3,7 +3,7 @@ import { verifySession } from "./lib/auth";
 
 const PUBLIC_PATHS = ["/login", "/register"];
 
-export function proxy(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("swarm-session")?.value;
   const authed = token ? !!verifySession(token) : false;
