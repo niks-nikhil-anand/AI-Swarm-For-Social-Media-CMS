@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/prisma";
-import { getCurrentUserId } from "../../../../lib/auth";
+import { getCurrentUserId } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return NextResponse.json(null, { status: 401 });
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, createdAt: true },
+    });
 
-  return NextResponse.json({ id: user.id, email: user.email, name: user.name });
+    if (!user) return NextResponse.json(null, { status: 401 });
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Something went wrong. Try again." }, { status: 500 });
+  }
 }
