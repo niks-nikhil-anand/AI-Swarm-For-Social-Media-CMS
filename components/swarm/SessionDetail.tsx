@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon, Btn, IconBtn, Badge, Card, Ring, StatusDot } from "./ui";
 import { Slide } from "./Output";
-import { type Project } from "./data";
+import { type Project, type Slide as SlideT, type Source } from "./data";
 
 const FMT_LABELS: Record<string, [string, string]> = {
   deck: ["PowerPoint", "layers"], pdf: ["PDF Report", "file-text"], docx: ["DOCX", "file-text"],
@@ -92,7 +92,7 @@ function DocPreview({ s }: { s: Project }) {
   );
 }
 
-function PptxPreview({ slides }: { slides: any[] }) {
+function PptxPreview({ slides }: { slides: SlideT[] }) {
   const [idx, setIdx] = useState(0);
   if (!slides.length) return <div style={{ padding: "24px", textAlign: "center", color: "var(--muted)" }}>No slides generated yet</div>;
   return (
@@ -115,8 +115,8 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
   id: string | null; onBack: () => void; onOpenLive: () => void; onRerun: () => void;
 }) {
   const [fetched, setFetched] = useState<Project | null>(null);
-  const [slides, setSlides] = useState<any[]>([]);
-  const [sources, setSources] = useState<any[]>([]);
+  const [slides, setSlides] = useState<SlideT[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
   const [notFound, setNotFound] = useState(false);
   const outputRef = useRef<HTMLDivElement>(null);
 
@@ -147,7 +147,6 @@ export function SessionDetail({ id, onBack, onOpenLive, onRerun }: {
 
     load();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const s = fetched;
