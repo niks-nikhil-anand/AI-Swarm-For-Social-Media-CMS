@@ -343,6 +343,9 @@ a { color: var(--accent); text-decoration: none; }
   background: color-mix(in oklab, var(--card) 92%, transparent);
   box-shadow: var(--shadow-lg);
 }
+.register-card {
+  width: min(430px, 100%);
+}
 .login-card-header {
   display: flex;
   align-items: center;
