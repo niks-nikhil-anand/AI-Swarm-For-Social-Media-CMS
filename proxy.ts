@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifySession } from "./lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/register"];
+const PUBLIC_PATHS = ["/", "/login", "/register"];
+const AUTH_PATHS = ["/login", "/register"];
 
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,7 +12,7 @@ export default function proxy(request: NextRequest) {
   if (!authed && !PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
-  if (authed && PUBLIC_PATHS.includes(pathname)) {
+  if (authed && AUTH_PATHS.includes(pathname)) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 }
