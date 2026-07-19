@@ -1,695 +1,212 @@
-# Social Swarm — Automated Social Media Research and Publishing
+# Social Swarm - AI Social Media Automation, Research, Scheduling and Publishing
 
-Social Swarm is a self-hostable, controlled AI content pipeline for researching the internet and social media, generating platform-native posts, and publishing approved content to X/Twitter and LinkedIn.
+Social Swarm is a self-hostable AI social media automation platform for researching trending topics, generating platform-native posts, reviewing content with human approval, scheduling posts, publishing through connected social accounts, and tracking performance analytics.
 
-The product direction is to run an automated social swarm that:
+It is built for creators, founders, marketers, agencies and small teams that want an automated content workflow for LinkedIn and X/Twitter without losing control over quality, sources, approvals or publishing safety.
 
-- Researches current topics from web search, social conversations, news, competitors, and approved source lists.
-- Scores topics and keywords for relevance, freshness, business value, and engagement potential.
-- Generates distinct LinkedIn and X/Twitter content from the same verified idea.
-- Reviews every post for factual accuracy, quality, SEO, and platform fit.
-- Requires human approval before publishing by default.
-- Schedules or publishes **three posts per day** across X/Twitter and LinkedIn.
-- Tracks performance and uses analytics to improve future recommendations.
+## What Is Social Swarm?
 
-The system should operate as a **controlled content pipeline**, not as fully independent agents. Each agent performs a bounded task, saves structured output, and passes that output to the next stage.
+Social Swarm turns a business goal into researched, reviewed and scheduled social content.
+
+Instead of asking one chatbot to write posts blindly, Social Swarm uses a controlled agent workflow:
+
+1. Research useful topics from configured sources.
+2. Deduplicate trends and collect source evidence.
+3. Score opportunities by freshness, relevance and engagement potential.
+4. Create draft briefs from the best signals.
+5. Generate LinkedIn and X/Twitter variants.
+6. Fact-check and quality-score each variant.
+7. Require human approval before publishing.
+8. Schedule approved posts through Postiz.
+9. Store publishing records and analytics.
+10. Feed performance insights into future recommendations.
+
+## Why This Project Is Useful
+
+Most social media automation tools focus only on scheduling. Social Swarm is different because it covers the complete content operations pipeline.
+
+Best parts of the project:
+
+- **Research-first content**: posts are created from source-backed trends, not random prompts.
+- **Human approval by default**: content cannot publish unless it passes review.
+- **Strict quality gate**: approval requires a minimum `80/100` content quality score.
+- **Platform-native writing**: LinkedIn and X/Twitter posts are generated differently from the same idea.
+- **Self-hostable stack**: PostgreSQL, Redis, SearXNG, Temporal, Postiz and worker services run locally with Docker Compose.
+- **Durable workflows**: Temporal handles long-running research, generation, scheduling, publishing sync and analytics jobs.
+- **Postiz integration**: Social Swarm can hand approved posts to a self-hosted Postiz instance for social account scheduling.
+- **Analytics-ready database**: published posts and metric snapshots are normalized for dashboards and future learning.
+- **Operational health APIs**: the app can report health for Postgres, SearXNG, Postiz, Redis and Temporal.
 
 ## Product Flow
 
 ```text
-Business Goals
-      ↓
-Research Swarm
-      ↓
-Topic and Keyword Scoring
-      ↓
-Content Strategy
-      ↓
-LinkedIn / X Content Creation
-      ↓
-Quality, SEO, Fact and Compliance Review
-      ↓
-Human Approval
-      ↓
-Scheduling and Publishing
-      ↓
-Performance Analytics
-      ↓
-Learning and Optimization
+Business Goal
+    -> Source Configuration
+    -> Trend Research Workflow
+    -> Evidence Extraction and Deduplication
+    -> Topic Scoring
+    -> Draft Briefs
+    -> LinkedIn and X/Twitter Generation
+    -> Fact Check and Quality Review
+    -> Human Approval
+    -> Three-Post Daily Scheduler
+    -> Postiz Publishing
+    -> Published Post Records
+    -> Analytics and Learning
 ```
 
-## Daily Publishing Goal
-
-The target publishing cadence is **three approved posts per day**.
-
-Recommended default schedule:
-
-| Slot | Purpose | Platforms |
-| --- | --- | --- |
-| Morning | Trend-aware educational or insight post | LinkedIn + X |
-| Afternoon | Practical framework, opinion, or short tactical post | LinkedIn + X |
-| Evening | Repurposed idea, thread, question, or conversation starter | X, optionally LinkedIn |
-
-The same central idea may be reused across platforms, but posts must be rewritten for the platform. LinkedIn content should be professional, insight-led, and structured for business readers. X/Twitter content should be shorter, more conversational, and may include threads or question-based variants.
-
-## Agent Pipeline
-
-### 1. Trend Research Agent
-
-Find relevant and timely topics from approved research sources.
-
-Sources may include:
-
-- SearXNG web search
-- Google Trends or a replaceable trends provider
-- X/Twitter search and conversations
-- LinkedIn industry discussions
-- Reddit communities
-- YouTube search suggestions
-- Industry news websites
-- Competitor blogs and social accounts
-- The company website and previous content
-
-Output example:
-
-```json
-{
-  "topic": "AI agents for small businesses",
-  "source_count": 18,
-  "trend_direction": "rising",
-  "target_audience": "startup founders",
-  "reason": "Increasing discussion across search and social channels",
-  "sources": [],
-  "suggested_angles": []
-}
-```
-
-This agent should not try to scan the entire internet. It should work from configured source lists, search queries, industries, locations, and time ranges.
-
-### 2. Social Listening Agent
-
-Understand what people are currently discussing.
-
-It monitors:
-
-- Brand mentions
-- Competitor mentions
-- Frequently asked questions
-- Complaints and pain points
-- Popular opinions
-- High-engagement posts
-- Emerging terminology
-- Hashtags and keywords
-
-Output example:
-
-```json
-{
-  "topic": "AI marketing agents",
-  "audience_questions": [
-    "How much does an AI agent cost?",
-    "Can it automatically publish content?"
-  ],
-  "popular_opinions": [],
-  "content_gaps": [],
-  "sentiment": "positive"
-}
-```
-
-### 3. SEO and Keyword Agent
-
-Convert trends into keyword opportunities.
-
-Scoring inputs:
-
-- Trend growth
-- Business relevance
-- Audience relevance
-- Search intent
-- Content gap
-- Social engagement potential
-- Competition advantage
-
-Suggested formula:
-
-```text
-Opportunity Score =
-25% Trend Growth
-+ 20% Business Relevance
-+ 15% Audience Relevance
-+ 15% Search Intent
-+ 10% Content Gap
-+ 10% Social Engagement
-+ 5% Competition Advantage
-```
-
-Output example:
-
-```json
-{
-  "primary_keyword": "AI agents for social media",
-  "secondary_keywords": [
-    "social media automation",
-    "AI content workflow",
-    "LinkedIn automation"
-  ],
-  "search_intent": "informational-commercial",
-  "opportunity_score": 84,
-  "recommended_format": "educational post",
-  "recommended_cta": "Book a strategy call"
-}
-```
-
-### 4. Topic Selection Agent
-
-Decide what should actually be published.
-
-Reject topics that are:
-
-- Irrelevant to the company
-- Repetitive
-- Too old
-- Unsupported by reliable sources
-- Highly controversial without approval
-- Low-value despite being trending
-- Already covered recently
-
-Output example:
-
-```json
-{
-  "topic": "How AI swarms improve content operations",
-  "objective": "generate inbound leads",
-  "audience": "marketing managers",
-  "content_pillar": "AI automation",
-  "primary_keyword": "AI social media automation",
-  "key_points": [],
-  "supporting_sources": [],
-  "platforms": ["linkedin", "x"]
-}
-```
-
-### 5. Fact-Checking Agent
-
-Validate every factual claim before writing or publishing.
-
-Responsibilities:
-
-- Open original sources.
-- Verify dates.
-- Compare important claims across multiple sources.
-- Flag statistics without primary sources.
-- Detect outdated information.
-- Store citations.
-- Assign confidence scores.
-
-Supported statuses:
-
-```text
-VERIFIED
-NEEDS_REVIEW
-UNSUPPORTED
-OUTDATED
-CONFLICTING_SOURCES
-```
-
-### 6. LinkedIn Writer
-
-Write professional LinkedIn content.
-
-It should produce:
-
-- Strong opening hook
-- Short paragraphs
-- Practical insights
-- Business perspective
-- Clear takeaway
-- Relevant CTA
-- Three to five focused hashtags
-
-Recommended formats:
-
-- Educational post
-- Founder story
-- Case study
-- Contrarian opinion
-- Step-by-step framework
-- Industry observation
-- Product insight
-- Document or carousel outline
-
-Output example:
-
-```json
-{
-  "platform": "linkedin",
-  "hook": "...",
-  "body": "...",
-  "cta": "...",
-  "hashtags": [],
-  "visual_brief": "...",
-  "character_count": 1450
-}
-```
-
-### 7. X/Twitter Writer
-
-Convert the same idea into X-native content.
-
-It should generate:
-
-- One short post
-- One detailed post
-- One thread
-- One question-based variation
-- One opinion-based variation
-
-Output example:
-
-```json
-{
-  "platform": "x",
-  "single_post": "...",
-  "thread": [
-    "1/ ...",
-    "2/ ...",
-    "3/ ..."
-  ],
-  "hashtags": [],
-  "visual_brief": "..."
-}
-```
-
-### 8. Visual Content Agent
-
-Create visual briefs or supporting assets.
-
-Potential outputs:
-
-- LinkedIn carousel outline
-- Infographic
-- Quote card
-- Diagram
-- Data visualization
-- X image
-- Blog cover image
-- Short-video script
-
-Output example:
-
-```json
-{
-  "format": "linkedin_carousel",
-  "dimensions": "1080x1350",
-  "slides": [
-    {
-      "slide": 1,
-      "headline": "...",
-      "body": "..."
-    }
-  ],
-  "brand_requirements": []
-}
-```
-
-### 9. Content Quality Agent
-
-Score generated content before approval.
-
-Checks:
-
-- Hook quality
-- Clarity
-- Grammar
-- Repetition
-- Readability
-- Reader value
-- Platform length
-- CTA quality
-- Keyword stuffing
-- Excessive hashtags
-- Unsupported claims
-
-Suggested scorecard:
-
-```json
-{
-  "clarity": 9,
-  "brand_alignment": 8,
-  "platform_fit": 9,
-  "factual_confidence": 10,
-  "engagement_potential": 7,
-  "overall_score": 86
-}
-```
-
-Default minimum score: `80/100`.
-
-### 10. Approval Manager
-
-Send content to a human and record the decision.
-
-Approval view should show:
-
-- LinkedIn preview
-- X/Twitter preview
-- Sources used
-- Keyword report
-- Quality score
-- Suggested publication time
-- Approve button
-- Request changes button
-- Reject button
-- Edit option
-
-State flow:
-
-```text
-DRAFT
-   ↓
-IN_REVIEW
-   ↓
-AWAITING_APPROVAL
-   ├── APPROVED
-   ├── CHANGES_REQUESTED
-   └── REJECTED
-```
-
-Publishing rule:
-
-```text
-IF approved:
-    schedule or publish
-
-IF changes requested:
-    return to writer
-
-IF rejected:
-    archive draft
-
-IF no response:
-    send reminder
-    keep content unpublished
-
-IF approval deadline expires:
-    mark approval expired
-    do not publish
-```
-
-Do not implement “post anyhow” when approval is missing. Automatic publishing should only be available for pre-approved categories such as approved product tips, evergreen templates, and event reminders. Even then, provide an emergency pause switch.
-
-### 11. Scheduler and Publisher
-
-Schedule and publish approved posts to X/Twitter and LinkedIn.
-
-Responsibilities:
-
-- Select the correct account.
-- Verify token permissions.
-- Check whether the content is still current.
-- Prevent duplicate publication.
-- Schedule by timezone.
-- Upload media.
-- Publish.
-- Save returned platform post IDs.
-- Retry temporary failures.
-- Notify the team.
-
-Publishing record:
-
-```json
-{
-  "content_id": "cnt_1082",
-  "platform": "linkedin",
-  "status": "published",
-  "platform_post_id": "urn:li:share:...",
-  "published_at": "2026-07-20T09:30:00+05:30",
-  "approved_by": "user_123",
-  "approval_timestamp": "...",
-  "content_hash": "..."
-}
-```
-
-Use an idempotency key or content hash so retries cannot publish the same post twice.
-
-### 12. Engagement Agent
-
-Monitor post-publication engagement.
-
-Signals:
-
-- Comments
-- Questions
-- Mentions
-- Reposts
-- High-value leads
-- Negative reactions
-- Common audience questions
-
-It may draft replies, but sensitive or commercial responses should require approval.
-
-### 13. Analytics Agent
-
-Collect performance after:
-
-- 1 hour
-- 24 hours
-- 7 days
-- 30 days
-
-Metrics:
-
-- Impressions
-- Engagement rate
-- Likes
-- Comments
-- Reposts
-- Saves
-- Profile visits
-- Link clicks
-- Leads
-- Conversion rate
-- Follower growth
-
-Results must be normalized because LinkedIn and X/Twitter expose different metrics.
-
-### 14. Learning Agent
-
-Identify patterns that improve future posts.
-
-Examples:
-
-- Which hooks work best
-- Best posting times
-- Best topic categories
-- Effective post length
-- Highest-performing CTAs
-- Keywords that create engagement
-- Topics that generate leads
-- Formats that perform poorly
-
-This agent updates recommendations, not permanent brand rules. A human should approve major strategy changes.
-
-### 15. Content Repurposing Agent
-
-Turn strong research into multiple assets:
-
-```text
-Research package
-   ├── LinkedIn post
-   ├── X post
-   ├── X thread
-   ├── Blog article
-   ├── Newsletter
-   ├── Carousel
-   ├── Short-video script
-   └── FAQ content
-```
+## Core Features
+
+- User registration, login, logout and signed HTTP-only sessions.
+- Campaign management with audience, objective, timezone and publishing settings.
+- Source management for SearXNG queries, competitors, keywords, hashtags, allowed domains and blocked domains.
+- Trend signal APIs and worker workflow for research.
+- Topic/URL deduplication and richer evidence extraction.
+- Automatic recommended draft brief creation from high-value research signals.
+- Content draft and platform variant APIs.
+- LinkedIn writer and X/Twitter writer prompts.
+- Fact-check result records and content quality score records.
+- Strict `80/100` approval gate.
+- Approval queue APIs with approve, request changes and reject actions.
+- Publishing schedule APIs with idempotency keys and content hashes.
+- Platform account sync through Postiz.
+- Published post records with platform IDs.
+- Analytics APIs for metrics, summaries and dashboard rollups.
+- Health APIs for service checks and stored operational samples.
+- API-backed dashboard pages for content queue, research, approvals, calendar, published posts, analytics, sources, workflows and settings.
+
+## Agent Workflow
+
+Social Swarm is organized as specialized agents and activities:
+
+| Agent / Activity | Purpose |
+| --- | --- |
+| Trend Research Agent | Finds timely topics from configured research sources |
+| Social Listening Agent | Tracks mentions, questions, pain points and content gaps |
+| SEO Keyword Agent | Converts trends into keyword and search-intent opportunities |
+| Topic Selection Agent | Chooses useful, relevant and safe topics |
+| LinkedIn Writer | Creates professional LinkedIn posts |
+| X/Twitter Writer | Creates short posts, threads and conversational variants |
+| Visual Content Agent | Produces carousel, image or short-video briefs |
+| Fact Checking Agent | Flags unsupported, outdated or conflicting claims |
+| Content Quality Agent | Scores clarity, platform fit, CTA quality and factual confidence |
+| Approval Manager | Sends posts to human review |
+| Scheduler Publisher | Creates daily publishing schedules and sends posts to Postiz |
+| Analytics Agent | Normalizes post performance metrics |
+| Learning Agent | Finds patterns for future recommendations |
 
 ## Workflow Architecture
 
 ```mermaid
 flowchart TB
-    UI["Next.js approval dashboard"] --> API["Next.js route handlers"]
-    API --> Auth["Signed HTTP-only session"]
-    API --> Prisma["Prisma 7"]
+    UI["Next.js Dashboard"] --> API["Next.js Route Handlers"]
+    API --> Auth["Signed Session Cookie"]
+    API --> Prisma["Prisma ORM"]
     Prisma --> DB[("PostgreSQL")]
 
-    API --> Temporal["Temporal server"]
-    Temporal --> Worker["Worker service"]
+    API --> Temporal["Temporal Server"]
+    Temporal --> Worker["Worker Service"]
     TemporalUI["Temporal UI"] --> Temporal
 
-    Worker --> Research["Research and listening agents"]
-    Worker --> Strategy["Topic and keyword scoring"]
-    Worker --> Writers["LinkedIn and X writers"]
-    Worker --> Review["Fact, quality and platform review"]
-    Worker --> Approval["Human approval gate"]
-    Worker --> Publishing["Scheduler and publisher"]
-    Worker --> Analytics["Engagement and learning agents"]
+    Worker --> Research["Research Activities"]
+    Worker --> Generation["LLM Content Generation"]
+    Worker --> Review["Fact and Quality Review"]
+    Worker --> Scheduler["Scheduling Workflow"]
+    Worker --> Analytics["Analytics Collection"]
 
     Research --> SearXNG["SearXNG"]
-    Research --> SocialAPIs["X / LinkedIn / Reddit / trends adapters"]
-    Writers --> LLM["LLM provider"]
-    Review --> LLM
-    Publishing --> Postiz["Postiz"]
-    Postiz --> XAPI["X/Twitter API"]
-    Postiz --> LinkedInAPI["LinkedIn API"]
-    Analytics --> DB
+    Generation --> LLM["OpenRouter-Compatible LLM"]
+    Scheduler --> Postiz["Postiz"]
+    Postiz --> LinkedIn["LinkedIn"]
+    Postiz --> X["X/Twitter"]
 ```
 
-## Core Runtime Services
+## Technology Stack
 
-The target local and production runtime uses these services as first-class infrastructure:
-
-| Service | Purpose |
+| Layer | Technology |
 | --- | --- |
-| PostgreSQL | Product database for users, projects, agents, approvals, schedules, evidence, generated posts and analytics |
-| SearXNG | Self-hosted metasearch layer for web research |
-| Temporal | Durable orchestration for research, generation, approval reminders, scheduling and analytics jobs |
-| Temporal UI | Operational dashboard for inspecting workflow state, failures, retries and history |
-| Worker | Executes Temporal workflows and activities, including research, LLM calls, persistence and publishing handoffs |
-| Postiz | Social scheduling and publishing layer for LinkedIn and X/Twitter connected accounts |
+| Frontend | Next.js 16 App Router, React 19, TypeScript |
+| Styling | Custom token-based dashboard UI, global CSS |
+| Backend | Next.js route handlers |
+| Database | PostgreSQL |
+| ORM | Prisma 7 |
+| Workflow engine | Temporal |
+| Worker runtime | TypeScript worker with Temporal activities |
+| Search | Self-hosted SearXNG |
+| Queue/cache infrastructure | Redis |
+| Publishing layer | Postiz |
+| AI provider | OpenRouter-compatible chat completions |
+| Local infrastructure | Docker Compose |
+| Auth | Scrypt password hashing and signed HTTP-only session cookie |
 
-## Publishing Integrations
+## Runtime Services
 
-Postiz is the publishing layer for social accounts.
+Docker Compose runs:
 
-Postiz should own:
-
-- Connected X/Twitter and LinkedIn accounts.
-- Platform-specific scheduling and publishing.
-- Media upload handling where supported.
-- Returned platform post IDs and publication status.
-
-Social Swarm should own:
-
-- Research.
-- Content generation.
-- Fact-checking and quality review.
-- Approval state.
-- Posting schedule decisions.
-- Audit trail and analytics records.
-
-Postiz calls must happen in API routes or Temporal workers, never in browser code. Social credentials must stay server-side.
-
-## Research Integrations
-
-Research should be adapter-based so providers can be replaced without rewriting the agent pipeline.
-
-Supported or planned adapters:
-
-- SearXNG for self-hosted web metasearch
-- X/Twitter recent search
-- LinkedIn social/content research where API access permits
-- Reddit search
-- Google Trends or an alternative trend source
-- YouTube suggestions/search
-- Company website ingestion
-- Competitor RSS/blog/social monitoring
-
-## Current Implementation Status
-
-| Area | Status | Notes |
-| --- | --- | --- |
-| Next.js application and design system | Implemented | Responsive app shell and workflow screens |
-| Registration, login, logout, session protection | Implemented | Scrypt password hashes and signed HTTP-only cookie |
-| PostgreSQL and Prisma schema | Implemented | Users, projects, agents, events, skills, slides, sections, references, search results and evidence |
-| Project history and detail pages | Implemented | Persisted project records, agents, activity, sources and output views |
-| Usage and analytics APIs | Partially implemented | Aggregates project usage from persisted records |
-| Skills API | Implemented | Create, list, community list and delete metadata |
-| Define -> Roles -> Run -> Output UI | Partially implemented | Creates projects and displays live/persisted state, with demo fallback |
-| SearXNG web search | Partially implemented | Server-side search client and project search API exist |
-| Temporal workflow and worker | Partially implemented | Workflow, activities and worker entry point exist |
-| LLM agent execution | Partially implemented | OpenRouter-style server-side model chain exists |
-| Generated deck/document persistence | Partially implemented | Workers can save slides, sections and references |
-| Social listening adapters | Planned | X/LinkedIn/Reddit/trends adapters still need implementation |
-| Approval queue | Planned | Required before production publishing |
-| X/Twitter publishing | Planned | Needs auth, API client, idempotency and audit trail |
-| LinkedIn publishing | Planned | Needs auth, media upload support, API client and audit trail |
-| Three-post daily scheduler | Planned | Needs schedule model, Temporal cron/schedules and timezone support |
-| Postiz integration | Planned | Required publishing layer for connected LinkedIn and X/Twitter accounts |
+- PostgreSQL on `localhost:5432`
+- Redis on `localhost:6379`
+- SearXNG on `localhost:8888`
+- Temporal on `localhost:7233`
+- Temporal UI on `localhost:8080`
+- Postiz on `localhost:5001`
+- Social Swarm worker service
 
 ## Repository Structure
 
 ```text
 .
 ├── app/
-│   ├── api/
-│   │   ├── analytics/         # Usage analytics endpoints
-│   │   ├── auth/              # Registration, login, logout, current user
-│   │   ├── projects/          # Projects, state, workflow start/status
-│   │   ├── search/            # SearXNG-backed project search
-│   │   ├── skills/            # Skill metadata APIs
-│   │   └── usage/             # Usage aggregation
-│   ├── dashboard/             # Usage dashboard
-│   ├── login/                 # Login page
-│   ├── projects/              # Project history and detail pages
-│   ├── register/              # Registration page
-│   ├── settings/              # Provider, roster, appearance, account UI
-│   ├── skills/                # Skill management UI
-│   ├── globals.css            # Design tokens and global styles
-│   ├── layout.tsx             # Root layout and metadata
-│   └── page.tsx               # Main swarm application
+│   ├── api/                  # Auth, campaigns, sources, trends, approvals, publishing, analytics, health
+│   ├── dashboard/            # API-backed Social Swarm dashboard
+│   ├── login/                # Login UI
+│   ├── register/             # Register UI
+│   └── page.tsx              # Public landing page
 ├── components/
-│   ├── projects/              # Project detail view
-│   └── swarm/                 # Main Swarm UI components
-├── generated/                 # Generated Prisma client
-├── lib/
-│   ├── auth.ts                # Password hashing and session signing
-│   ├── llm.ts                 # Server-side LLM client
-│   ├── prisma.ts              # Prisma client singleton
-│   ├── searxng.ts             # SearXNG client
-│   ├── skills.ts              # Skill category mappings
-│   ├── temporal.ts            # Temporal client helpers
-│   └── constants/             # Agent prompts and provider constants
+│   └── swarm/                # Dashboard shell and views
+├── lib/                      # Auth, Prisma, API helpers, Postiz, SearXNG, Temporal, hashing
 ├── prisma/
-│   ├── schema.prisma          # PostgreSQL data model
-│   └── migrations/            # Database migrations
-├── public/                    # Logo and SVG icon assets
+│   ├── schema.prisma         # Product database schema
+│   └── migrations/           # Prisma migrations
+├── prompts/                  # Agent prompts
 ├── workers/
-│   ├── activities.ts          # Temporal activities
-│   ├── index.ts               # Worker entry point
-│   └── workflow.ts            # Research workflow definition
-├── docker-compose.yml         # Local Postgres, Temporal, Temporal UI, SearXNG and worker
-├── Dockerfile.worker          # Worker container
-├── proxy.ts                   # Page authentication redirects
-├── prisma.config.ts           # Prisma datasource configuration
-└── package.json               # Scripts and dependencies
+│   ├── activities.ts         # Temporal activities
+│   ├── workflow.ts           # Temporal workflows
+│   └── index.ts              # Worker entrypoint
+├── docker-compose.yml
+├── Dockerfile.worker
+├── IMPLEMENTATION_PLAN.md
+└── package.json
 ```
 
 Generated directories such as `.next/`, `generated/`, and `node_modules/` should not be edited manually.
 
-## Local Development
+## Environment Variables
 
-### Requirements
+The project uses two env files:
 
-- Node.js compatible with Next.js 16
-- npm
-- Docker and Docker Compose
-- PostgreSQL, SearXNG, Temporal, Temporal UI, Postiz and worker services
+- `.env` for Docker services and worker service-to-service URLs.
+- `.env.local` for the Next.js app running on your host machine.
 
-### Environment
-
-The project uses two environment files:
-
-- `.env` for Docker services and the worker.
-- `.env.local` for the Next.js dev server on the host machine.
-
-Required values:
+Example host-local values:
 
 ```dotenv
 DB_PASSWORD=postgres
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/swarm
 SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/swarm_shadow
 AUTH_SECRET=replace-with-a-long-random-secret
+
 OPENROUTER_API_KEY=
+GEMINI_API_KEY=
+
 TEMPORAL_ADDRESS=localhost:7233
 TEMPORAL_NAMESPACE=default
 TEMPORAL_CORS_ORIGINS=http://localhost:3000
+NEXT_PUBLIC_TEMPORAL_UI_URL=http://localhost:8080
+
 SEARXNG_URL=http://localhost:8888
 SEARXNG_BASE_URL=http://localhost:8888/
 REDIS_URL=redis://localhost:6379
-NEXT_PUBLIC_TEMPORAL_UI_URL=http://localhost:8080
+
 POSTIZ_URL=http://localhost:5001
 POSTIZ_API_KEY=
 POSTIZ_PORT=5001
@@ -699,9 +216,10 @@ POSTIZ_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/swarm?schema=p
 POSTIZ_JWT_SECRET=replace-this-postiz-jwt-secret
 POSTIZ_NOT_SECURED=true
 POSTIZ_API_LIMIT=90
-GEMINI_API_KEY=
+
 LINKEDIN_CLIENT_ID=
 LINKEDIN_CLIENT_SECRET=
+
 X_API_KEY=
 X_API_SECRET=
 X_BEARER_TOKEN=
@@ -710,126 +228,107 @@ X_ACCESS_TOKEN_SECRET=
 X_URL=
 ```
 
-For `.env` used inside Docker services, use service hostnames such as `postgres`, `redis`, `searxng`, `temporal`, and `postiz`. For `.env.local` used by the Next.js dev server on your Mac, use `localhost` and exposed ports.
+Do not commit real credentials. Keep social platform and publishing tokens server-side.
 
-Do not commit real credentials.
+## Local Development
 
-### Run Infrastructure
-
-```bash
-docker-compose up -d
-```
-
-This starts:
-
-- PostgreSQL on `localhost:5432`
-- Temporal on `localhost:7233`
-- Temporal UI on `localhost:8080`
-- SearXNG on `localhost:8888`
-- Postiz on `localhost:5001`
-- Worker service
-
-The expected Docker Compose stack for this product is PostgreSQL, SearXNG, Postiz, Temporal, Temporal UI and the worker.
-
-### Run the App
+Install dependencies:
 
 ```bash
 npm install
+```
+
+Start infrastructure:
+
+```bash
+docker compose up -d
+```
+
+Generate Prisma client and apply migrations:
+
+```bash
 npx prisma generate
 npx prisma migrate deploy
+```
+
+Run the Next.js app:
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open:
 
-### Worker
+- App: [http://localhost:3000](http://localhost:3000)
+- Postiz: [http://localhost:5001](http://localhost:5001)
+- Temporal UI: [http://localhost:8080](http://localhost:8080)
+- SearXNG: [http://localhost:8888](http://localhost:8888)
 
-The worker can run through Docker Compose. For local host execution:
+Run the worker locally if you are not using the Docker worker:
 
 ```bash
 npm run worker
 ```
 
-### Quality Checks
+## Quality Checks
 
 ```bash
 npm run lint
 npm run build
 ```
 
-## Implementation Roadmap
+## API Areas
 
-### Phase 1: Convert Product Model to Social Publishing
+| Area | Routes |
+| --- | --- |
+| Auth | `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, `/api/auth/logout` |
+| Campaigns | `/api/campaigns`, `/api/campaigns/[id]` |
+| Sources | `/api/sources`, `/api/sources/[id]` |
+| Trends | `/api/trends`, `/api/trends/run`, `/api/trends/[id]/draft` |
+| Drafts and variants | `/api/content/drafts`, `/api/content/drafts/[id]`, `/api/content/drafts/[id]/generate`, `/api/content/variants/[id]` |
+| Approvals | `/api/approvals`, `/api/approvals/[id]/approve`, `/api/approvals/[id]/changes`, `/api/approvals/[id]/reject` |
+| Publishing | `/api/platform-accounts`, `/api/platform-accounts/sync`, `/api/schedules`, `/api/schedules/[id]/cancel`, `/api/published-posts` |
+| Analytics | `/api/analytics`, `/api/analytics/summary`, `/api/analytics/metrics` |
+| Health | `/api/health`, `/api/health/checks` |
 
-- [ ] Add content campaign, content draft, approval, publishing schedule and platform account models.
-- [ ] Add content pillar configuration.
-- [ ] Replace generic output formats with social campaign outputs.
-- [ ] Make the dashboard show daily publishing readiness and approval backlog.
+## Current Status
 
-### Phase 2: Research and Social Listening
+Implemented:
 
-- [ ] Expand SearXNG research into a reusable research activity.
-- [ ] Add source configuration for industries, competitors, keywords and locations.
-- [ ] Add social listening adapters for X/Twitter, LinkedIn where available, Reddit and trends providers.
-- [ ] Store raw signals separately from generated insights.
+- Social publishing Prisma schema and migration.
+- Auth APIs.
+- Campaign, source, trend, draft, variant, approval, schedule and published-post APIs.
+- Analytics and health APIs.
+- Postiz client and platform account sync.
+- Temporal worker workflows for trend research, draft generation, approval expiry, publishing scheduling, status sync and analytics collection.
+- API-backed dashboard views.
+- Login, register and public landing pages.
 
-### Phase 3: Content Generation
+Still planned:
 
-- [ ] Add topic scoring and selection activities.
-- [ ] Add LinkedIn writer and X/Twitter writer prompts with strict JSON contracts.
-- [ ] Add visual brief generation.
+- Full direct LinkedIn OAuth flow inside Social Swarm.
+- Full direct X/Twitter posting client inside Social Swarm.
+- Postiz media upload support.
+- Learning recommendations from analytics.
+- More complete test coverage for workflow retry, publishing safety and approval rules.
+- Production credential encryption and audit hardening.
 
-### Phase 4: Review and Approval
+## Security and Publishing Safety
 
-- [ ] Add fact-checking and quality score records.
-- [ ] Build approval queue UI with previews, sources and edit controls.
-- [ ] Require explicit approval before publishing.
-- [ ] Add emergency pause switch.
+Social Swarm is designed around controlled automation:
 
-### Phase 5: Scheduling and Publishing
+- No approval means no publishing.
+- Rejected content cannot publish.
+- Expired approvals cannot publish.
+- Content must reach at least `80/100` quality score before approval.
+- Publishing uses content hashes and idempotency keys.
+- Social credentials must stay server-side.
+- Postiz and direct platform credentials should never be exposed in browser code.
+- Human review is required before sensitive or high-impact publishing.
 
-- [ ] Add three-post daily schedule generator by timezone.
-- [ ] Add idempotency keys/content hashes.
-- [ ] Add Postiz publishing client.
-- [ ] Connect approved posts to Postiz schedules for X/Twitter and LinkedIn.
-- [ ] Record platform post IDs and publication status.
+## SEO Keywords
 
-### Phase 6: Analytics and Learning
-
-- [ ] Collect engagement metrics after 1 hour, 24 hours, 7 days and 30 days.
-- [ ] Normalize LinkedIn and X/Twitter metrics.
-- [ ] Build performance dashboard.
-- [ ] Feed learnings back into recommendations after human review.
-
-## Security and Safety Principles
-
-- Keep LLM, search, social platform and storage credentials server-side.
-- Encrypt provider and platform credentials at rest.
-- Treat web and social content as untrusted input.
-- Protect page retrieval against SSRF, unsafe redirects, oversized responses and private network targets.
-- Separate raw evidence from generated conclusions.
-- Retain source provenance for every factual claim.
-- Require human approval before publishing by default.
-- Never publish when approval is missing, rejected or expired.
-- Use idempotency keys for social publishing.
-- Record audit events for approvals, changes, retries and publications.
-- Provide an emergency pause switch for all scheduled publishing.
-
-## Technology Stack
-
-- Next.js 16 App Router
-- React 19 and TypeScript
-- Prisma 7 with PostgreSQL
-- Tailwind CSS 4 tooling plus a custom token-based design system
-- Temporal for durable workflows and task queues
-- Temporal UI for workflow inspection and debugging
-- SearXNG for self-hosted metasearch
-- Worker service for workflow activities and publishing handoffs
-- Postiz for LinkedIn and X/Twitter scheduling and publishing
-- OpenRouter-compatible LLM calls
-- Docker Compose for local infrastructure
-- Planned: X/Twitter API
-- Planned: LinkedIn Posts API
+AI social media automation, LinkedIn automation, X Twitter scheduler, self-hosted social media scheduler, AI content workflow, social media approval workflow, AI content generation, Postiz alternative, Buffer alternative, Temporal workflow automation, SearXNG research automation, Prisma Next.js social media app.
 
 ## External Documentation
 
@@ -837,10 +336,9 @@ npm run build
 - [Prisma documentation](https://www.prisma.io/docs)
 - [Temporal documentation](https://docs.temporal.io/)
 - [SearXNG documentation](https://docs.searxng.org/)
-- [SearXNG Search API](https://docs.searxng.org/dev/search_api)
-- [X API documentation](https://docs.x.com/)
-- [LinkedIn Marketing API documentation](https://learn.microsoft.com/en-us/linkedin/marketing/)
 - [Postiz documentation](https://docs.postiz.com/)
+- [X API documentation](https://docs.x.com/)
+- [LinkedIn API documentation](https://learn.microsoft.com/en-us/linkedin/)
 
 ## License
 
