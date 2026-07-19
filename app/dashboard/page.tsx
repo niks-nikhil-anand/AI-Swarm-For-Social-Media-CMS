@@ -4,14 +4,17 @@ import { useState, useEffect, useCallback, useSyncExternalStore, type CSSPropert
 import { Sidebar, TopBar } from "../../components/swarm/Shell";
 
 import { DashboardOverview } from "../../components/swarm/DashboardOverview";
-import { ContentQueue } from "../../components/swarm/ContentQueue";
-import { ResearchSignals } from "../../components/swarm/ResearchSignals";
-import { ApprovalsList } from "../../components/swarm/ApprovalsList";
-import { CalendarGrid } from "../../components/swarm/CalendarGrid";
-import { PublishedPosts } from "../../components/swarm/PublishedPosts";
-import { AnalyticsView } from "../../components/swarm/AnalyticsView";
-import { SourcesManager } from "../../components/swarm/SourcesManager";
-import { SettingsPanel } from "../../components/swarm/SettingsPanel";
+import {
+  AnalyticsApiView,
+  ApprovalsApiView,
+  CalendarApiView,
+  ContentQueueApiView,
+  PublishedPostsApiView,
+  ResearchApiView,
+  SettingsApiView,
+  SourcesApiView,
+  WorkflowsApiView,
+} from "../../components/swarm/ApiBackedViews";
 
 interface Tweaks { theme: string; accent: string; density: string; motion: number }
 const TWEAK_DEFAULTS: Tweaks = { theme: "dark", accent: "blue", density: "comfortable", motion: 60 };
@@ -53,6 +56,7 @@ const TITLES: Record<string, string> = {
   published: 'Published Posts',
   analytics: 'Analytics',
   sources: 'Sources',
+  workflows: 'Workflows',
   settings: 'Settings'
 };
 
@@ -114,14 +118,15 @@ export default function DashboardPage() {
 
         <div style={{ flex: 1, overflow: "auto", padding: "18px 20px 32px" }}>
           {view === "dashboard" && <DashboardOverview theme={t.theme} isPaused={isPaused} onGoPage={setView} />}
-          {view === "queue" && <ContentQueue theme={t.theme} />}
-          {view === "research" && <ResearchSignals theme={t.theme} />}
-          {view === "approvals" && <ApprovalsList theme={t.theme} />}
-          {view === "calendar" && <CalendarGrid theme={t.theme} />}
-          {view === "published" && <PublishedPosts theme={t.theme} />}
-          {view === "analytics" && <AnalyticsView theme={t.theme} />}
-          {view === "sources" && <SourcesManager theme={t.theme} />}
-          {view === "settings" && <SettingsPanel theme={t.theme} />}
+          {view === "queue" && <ContentQueueApiView />}
+          {view === "research" && <ResearchApiView />}
+          {view === "approvals" && <ApprovalsApiView />}
+          {view === "calendar" && <CalendarApiView />}
+          {view === "published" && <PublishedPostsApiView />}
+          {view === "analytics" && <AnalyticsApiView />}
+          {view === "sources" && <SourcesApiView />}
+          {view === "workflows" && <WorkflowsApiView />}
+          {view === "settings" && <SettingsApiView />}
         </div>
       </main>
     </div>
