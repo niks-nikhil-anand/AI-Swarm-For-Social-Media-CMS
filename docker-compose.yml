@@ -1,5 +1,6 @@
-# Local infrastructure for Swarm: PostgreSQL, SearXNG, Temporal + UI.
-# All services use the local PostgreSQL database defined below.
+# Local infrastructure for Social Swarm.
+# Stack: PostgreSQL, Redis, SearXNG, Temporal, Temporal UI, Postiz, and worker.
+# `.env` is Docker-internal, so service URLs use Compose service names.
 
 services:
   postgres:
@@ -17,6 +18,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
   searxng:
     image: searxng/searxng:latest
@@ -54,6 +69,44 @@ services:
       - temporal
     restart: unless-stopped
 
+  postiz:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    environment:
+      # Public URLs exposed to your browser.
+      MAIN_URL: ${POSTIZ_PUBLIC_URL:-http://localhost:5001}
+      FRONTEND_URL: ${POSTIZ_PUBLIC_URL:-http://localhost:5001}
+      NEXT_PUBLIC_BACKEND_URL: ${POSTIZ_PUBLIC_BACKEND_URL:-http://localhost:5001/api}
+
+      # Internal service URLs used by Postiz containers.
+      BACKEND_INTERNAL_URL: http://postiz:5000
+      DATABASE_URL: ${POSTIZ_DATABASE_URL:-postgresql://postgres:${DB_PASSWORD:-postgres}@postgres:5432/swarm?schema=postiz}
+      REDIS_URL: redis://redis:6379
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+
+      # Local self-host defaults. Override in .env before production use.
+      JWT_SECRET: ${POSTIZ_JWT_SECRET:-replace-this-postiz-jwt-secret}
+      STORAGE_PROVIDER: local
+      UPLOAD_DIRECTORY: /uploads
+      NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: /uploads
+      IS_GENERAL: "true"
+      NOT_SECURED: ${POSTIZ_NOT_SECURED:-true}
+
+      # Optional API key used later by Social Swarm workers/API routes.
+      API_LIMIT: ${POSTIZ_API_LIMIT:-90}
+    ports:
+      - "${POSTIZ_PORT:-5001}:5000"
+    volumes:
+      - postiz_uploads:/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    restart: unless-stopped
+
   worker:
     build:
       context: .
@@ -64,6 +117,14 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       SEARXNG_URL: http://searxng:8080
+      POSTIZ_URL: http://postiz:5000
+      POSTIZ_API_KEY: ${POSTIZ_API_KEY:-}
+      X_API_KEY: ${X_API_KEY:-}
+      X_API_SECRET: ${X_API_SECRET:-}
+      X_BEARER_TOKEN: ${X_BEARER_TOKEN:-}
+      X_ACCESS_TOKEN: ${X_ACCESS_TOKEN:-}
+      X_ACCESS_TOKEN_SECRET: ${X_ACCESS_TOKEN_SECRET:-}
+      X_URL: ${X_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,7 +132,11 @@ services:
         condition: service_started
       searxng:
         condition: service_started
+      postiz:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  redis_data:
+  postiz_uploads:
